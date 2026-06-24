@@ -6,6 +6,7 @@
 using System;
 using System.Drawing;
 using System.Linq;
+using System.Net;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
@@ -27,6 +28,7 @@ namespace Printervention
         private Button _discoverButton;
         private Button _openSupportButton;
         private Button _refreshDriversButton;
+        private Button _testPlanButton;
         private Button _createQueueButton;
         private DriverRecommendation _currentRecommendation;
 
@@ -103,10 +105,13 @@ namespace Printervention
             _openSupportButton.Click += (sender, args) => OpenSupportPage();
             _refreshDriversButton = new Button { Text = "Refresh Installed Drivers", AutoSize = true, Margin = new Padding(0, 6, 8, 8) };
             _refreshDriversButton.Click += (sender, args) => RefreshInstalledDrivers();
+            _testPlanButton = new Button { Text = "Test Plan", AutoSize = true, Margin = new Padding(0, 6, 8, 8) };
+            _testPlanButton.Click += (sender, args) => TestPlan();
             _createQueueButton = new Button { Text = "Create Queue", AutoSize = true, Margin = new Padding(0, 6, 8, 8) };
             _createQueueButton.Click += (sender, args) => CreateQueue();
             actionBar.Controls.Add(_openSupportButton);
             actionBar.Controls.Add(_refreshDriversButton);
+            actionBar.Controls.Add(_testPlanButton);
             actionBar.Controls.Add(_createQueueButton);
             root.Controls.Add(actionBar);
 
@@ -224,6 +229,7 @@ namespace Printervention
                 "- Use PCL or PCL6 only." + Environment.NewLine +
                 "- Do not use PCL v4, class drivers, IPP class drivers, or vendor app-only packages." + Environment.NewLine +
                 "- Download installers only from the authorized vendor domains shown above." + Environment.NewLine +
+                "- Use Test Plan when you do not have a printer connected." + Environment.NewLine +
                 "- After queue creation, Printervention attempts to set black-and-white and one-sided defaults." + Environment.NewLine + Environment.NewLine +
                 _currentRecommendation.Notes;
         }
@@ -257,11 +263,69 @@ namespace Printervention
             }
         }
 
+        private void TestPlan()
+        {
+            try
+            {
+                var driverName = Convert.ToString(_installedDriverComboBox.SelectedItem);
+                if (string.IsNullOrWhiteSpace(driverName))
+                {
+                    driverName = _currentRecommendation.RecommendedDriver;
+                }
+
+                var report = BuildTestPlanReport(driverName);
+                SetStatus("Test plan passed. No printer or Windows queue was changed.");
+                MessageBox.Show(this, report, "Printervention test plan", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                SetStatus(ex.Message);
+                MessageBox.Show(this, ex.Message, "Test plan failed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        }
+
+        private string BuildTestPlanReport(string driverName)
+        {
+            IPAddress parsed;
+            if (!IPAddress.TryParse(_ipAddressTextBox.Text.Trim(), out parsed))
+            {
+                throw new InvalidOperationException("Enter any valid test IP address, such as 192.0.2.10.");
+            }
+
+            if (string.IsNullOrWhiteSpace(_printerNameTextBox.Text))
+            {
+                throw new InvalidOperationException("Enter a queue name for the test plan.");
+            }
+
+            if (!DriverCatalog.IsAllowedDriverName(driverName))
+            {
+                throw new InvalidOperationException("The selected or recommended driver is not a non-v4 PCL/PCL6 driver.");
+            }
+
+            if (_currentRecommendation.IsKnownVendor && !_currentRecommendation.IsAuthorizedUrl(_currentRecommendation.SupportUrl))
+            {
+                throw new InvalidOperationException("The support URL is not on the authorized vendor domain list.");
+            }
+
+            // The dry run intentionally mirrors the create path without creating ports or queues.
+            return
+                "No changes were made." + Environment.NewLine + Environment.NewLine +
+                "Printer IP: " + parsed + Environment.NewLine +
+                "Queue name: " + _printerNameTextBox.Text.Trim() + Environment.NewLine +
+                "Port to create: IP_" + parsed + Environment.NewLine +
+                "Driver to use: " + driverName + Environment.NewLine +
+                "Vendor: " + _currentRecommendation.Vendor + Environment.NewLine +
+                "Authorized domains: " + _currentRecommendation.AuthorizedDomainDisplay + Environment.NewLine +
+                "Defaults to apply: black-and-white, one-sided" + Environment.NewLine + Environment.NewLine +
+                "Hardware still needed for final validation: discovery response, test page output, and driver-specific color/duplex behavior.";
+        }
+
         private void SetBusy(bool busy, string status)
         {
             _discoverButton.Enabled = !busy;
             _openSupportButton.Enabled = !busy;
             _refreshDriversButton.Enabled = !busy;
+            _testPlanButton.Enabled = !busy;
             _createQueueButton.Enabled = !busy;
 
             if (!string.IsNullOrWhiteSpace(status))

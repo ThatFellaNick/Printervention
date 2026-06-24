@@ -9,6 +9,7 @@ using System.Diagnostics;
 using System.Drawing.Printing;
 using System.Linq;
 using System.Management;
+using System.Net;
 
 namespace Printervention
 {
@@ -40,6 +41,12 @@ namespace Printervention
                 throw new ArgumentException("Enter a printer IP address first.", "ipAddress");
             }
 
+            IPAddress parsedIp;
+            if (!IPAddress.TryParse(ipAddress.Trim(), out parsedIp))
+            {
+                throw new ArgumentException("The printer IP address is not valid.", "ipAddress");
+            }
+
             if (string.IsNullOrWhiteSpace(printerName))
             {
                 throw new ArgumentException("Enter a printer name.", "printerName");
@@ -50,8 +57,8 @@ namespace Printervention
                 throw new InvalidOperationException("Choose an installed PCL/PCL6 driver that is not v4.");
             }
 
-            var portName = "IP_" + ipAddress.Trim();
-            EnsureTcpIpPort(portName, ipAddress.Trim());
+            var portName = "IP_" + parsedIp;
+            EnsureTcpIpPort(portName, parsedIp.ToString());
             EnsurePrinterDoesNotExist(printerName.Trim());
 
             RunPowerShell("Add-Printer -Name " + PsQuote(printerName.Trim()) + " -DriverName " + PsQuote(driverName.Trim()) + " -PortName " + PsQuote(portName), true);
