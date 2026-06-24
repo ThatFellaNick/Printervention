@@ -100,7 +100,7 @@ namespace Printervention
 
             var actionBar = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, FlowDirection = FlowDirection.LeftToRight };
             _openSupportButton = new Button { Text = "Open Driver Page", AutoSize = true, Margin = new Padding(0, 6, 8, 8) };
-            _openSupportButton.Click += (sender, args) => _currentRecommendation.OpenSupportPage();
+            _openSupportButton.Click += (sender, args) => OpenSupportPage();
             _refreshDriversButton = new Button { Text = "Refresh Installed Drivers", AutoSize = true, Margin = new Padding(0, 6, 8, 8) };
             _refreshDriversButton.Click += (sender, args) => RefreshInstalledDrivers();
             _createQueueButton = new Button { Text = "Create Queue", AutoSize = true, Margin = new Padding(0, 6, 8, 8) };
@@ -219,11 +219,26 @@ namespace Printervention
                 "Model/Search: " + _currentRecommendation.ModelQuery + Environment.NewLine +
                 "Recommended driver family: " + _currentRecommendation.RecommendedDriver + Environment.NewLine +
                 "Official driver page: " + _currentRecommendation.SupportUrl + Environment.NewLine + Environment.NewLine +
+                "Authorized vendor domains: " + _currentRecommendation.AuthorizedDomainDisplay + Environment.NewLine + Environment.NewLine +
                 "Rules:" + Environment.NewLine +
                 "- Use PCL or PCL6 only." + Environment.NewLine +
                 "- Do not use PCL v4, class drivers, IPP class drivers, or vendor app-only packages." + Environment.NewLine +
+                "- Download installers only from the authorized vendor domains shown above." + Environment.NewLine +
                 "- After queue creation, Printervention attempts to set black-and-white and one-sided defaults." + Environment.NewLine + Environment.NewLine +
                 _currentRecommendation.Notes;
+        }
+
+        private void OpenSupportPage()
+        {
+            try
+            {
+                _currentRecommendation.OpenSupportPage();
+            }
+            catch (Exception ex)
+            {
+                SetStatus(ex.Message);
+                MessageBox.Show(this, ex.Message, "Blocked URL", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
         }
 
         private void CreateQueue()
