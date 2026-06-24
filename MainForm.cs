@@ -201,11 +201,11 @@ namespace Printervention
                 if (_installedDriverComboBox.Items.Count > 0)
                 {
                     _installedDriverComboBox.SelectedIndex = 0;
-                    SetStatus("Found " + _installedDriverComboBox.Items.Count + " installed non-v4 PCL driver(s).");
+                    SetStatus("Found " + _installedDriverComboBox.Items.Count + " installed model-specific non-v4 PCL driver(s).");
                 }
                 else
                 {
-                    SetStatus("No installed non-v4 PCL drivers were found. Open the official driver page and install or stage one first.");
+                    SetStatus("No installed model-specific non-v4 PCL drivers were found. Open the official driver page and install or stage one first.");
                 }
             }
             catch (Exception ex)
@@ -227,6 +227,7 @@ namespace Printervention
                 "Authorized vendor domains: " + _currentRecommendation.AuthorizedDomainDisplay + Environment.NewLine + Environment.NewLine +
                 "Rules:" + Environment.NewLine +
                 "- Use PCL or PCL6 only." + Environment.NewLine +
+                "- Use model-specific drivers when available; avoid universal, global, and generic drivers." + Environment.NewLine +
                 "- Do not use PCL v4, class drivers, IPP class drivers, or vendor app-only packages." + Environment.NewLine +
                 "- Download installers only from the authorized vendor domains shown above." + Environment.NewLine +
                 "- Use Test Plan when you do not have a printer connected." + Environment.NewLine +
@@ -299,7 +300,7 @@ namespace Printervention
 
             if (!DriverCatalog.IsAllowedDriverName(driverName))
             {
-                throw new InvalidOperationException("The selected or recommended driver is not a non-v4 PCL/PCL6 driver.");
+                throw new InvalidOperationException("The selected or recommended driver is not a model-specific non-v4 PCL/PCL6 driver.");
             }
 
             if (_currentRecommendation.IsKnownVendor && !_currentRecommendation.IsAuthorizedUrl(_currentRecommendation.SupportUrl))

@@ -69,31 +69,36 @@ namespace Printervention
                 return false;
             }
 
-            return name.Contains("pcl") || name.Contains("universal printing");
+            if (name.Contains("universal") || name.Contains("global") || name.Contains("generic"))
+            {
+                return false;
+            }
+
+            return name.Contains("pcl");
         }
 
         private static List<VendorDriverProfile> BuildProfiles()
         {
             return new List<VendorDriverProfile>
             {
-                new VendorDriverProfile("Brother", "Brother Universal Printer Driver PCL", "https://support.brother.com/", "Use the model page or Brother universal PCL package. Avoid BR-Script and any v4 class driver.", new[] { "brother.com", "support.brother.com" }, "brother"),
-                new VendorDriverProfile("Canon", "Canon Generic Plus PCL6 Printer Driver", "https://www.usa.canon.com/support", "Use Generic Plus PCL6 for supported office devices. Avoid UFR II-only, PS-only, and v4 packages.", new[] { "canon.com", "usa.canon.com", "downloads.canon.com" }, "canon"),
-                new VendorDriverProfile("Epson", "Epson Universal Print Driver PCL6", "https://epson.com/Support/sl/s", "Use Epson Universal Print Driver PCL6 when the device supports PCL. Avoid ESC/P-R-only and v4 packages.", new[] { "epson.com", "ftp.epson.com" }, "epson"),
-                new VendorDriverProfile("Fujifilm", "FUJIFILM Universal PCL6 Print Driver", "https://support-fb.fujifilm.com/", "Use the FUJIFILM Business Innovation PCL6 package for the model.", new[] { "fujifilm.com", "support-fb.fujifilm.com" }, "fujifilm", "fuji xerox"),
+                new VendorDriverProfile("Brother", "Brother model-specific PCL6 printer driver", "https://support.brother.com/", "Use the exact model page and select the model-specific PCL/PCL6 package. Avoid universal, BR-Script, class, and v4 drivers.", new[] { "brother.com", "support.brother.com" }, "brother"),
+                new VendorDriverProfile("Canon", "Canon model-specific PCL6 printer driver", "https://www.usa.canon.com/support", "Use the exact model page and select a model-specific PCL6 package. Avoid Generic Plus, UFR II-only, PS-only, class, universal, and v4 packages.", new[] { "canon.com", "usa.canon.com", "downloads.canon.com" }, "canon"),
+                new VendorDriverProfile("Epson", "Epson model-specific PCL6 printer driver", "https://epson.com/Support/sl/s", "Use the exact model page and select the model-specific PCL/PCL6 package when the device supports PCL. Avoid Universal Print Driver, ESC/P-R-only, class, and v4 packages.", new[] { "epson.com", "ftp.epson.com" }, "epson"),
+                new VendorDriverProfile("Fujifilm", "FUJIFILM model-specific PCL6 print driver", "https://support-fb.fujifilm.com/", "Use the exact FUJIFILM Business Innovation model page and select the model-specific PCL6 package. Avoid universal and v4 packages.", new[] { "fujifilm.com", "support-fb.fujifilm.com" }, "fujifilm", "fuji xerox"),
                 new VendorDriverProfile("Fujitsu", "Fujitsu PCL Printer Driver", "https://www.fujitsu.com/global/support/products/computing/peripheral/printers/", "Use the model-specific PCL driver when available. Fujitsu support varies heavily by printer family.", new[] { "fujitsu.com" }, "fujitsu"),
-                new VendorDriverProfile("HP", "HP Universal Print Driver PCL6", "https://support.hp.com/drivers", "Use HP Universal Print Driver PCL6 or a model-specific PCL6 package. Avoid HP Smart, IPP class, and v4 packages.", new[] { "hp.com", "support.hp.com", "ftp.hp.com", "hpe.com" }, "hewlett-packard", "hewlett packard", "hp"),
-                new VendorDriverProfile("Konica Minolta", "Konica Minolta Universal PCL", "https://kmbs.konicaminolta.us/support-downloads/", "Use Universal PCL or model-specific PCL. Avoid PS-only and v4 packages.", new[] { "konicaminolta.us", "kmbs.konicaminolta.us", "konicaminolta.com" }, "konica", "minolta", "bizhub"),
-                new VendorDriverProfile("Kyocera", "Kyocera Classic Universal Driver PCL", "https://www.kyoceradocumentsolutions.us/en/support/downloads.html", "Use Classic Universal Driver PCL or model-specific KX/PCL. Avoid v4 packages.", new[] { "kyoceradocumentsolutions.us", "kyoceradocumentsolutions.com", "kyocera.com" }, "kyocera", "ecosys", "taskalfa"),
-                new VendorDriverProfile("Lexmark", "Lexmark Universal Print Driver PCL XL", "https://www.lexmark.com/en_us/support/download-search.html", "Use Lexmark Universal Print Driver PCL XL. Avoid v4 packages.", new[] { "lexmark.com", "downloads.lexmark.com" }, "lexmark"),
+                new VendorDriverProfile("HP", "HP model-specific PCL6 printer driver", "https://support.hp.com/drivers", "Use the exact model page and select the model-specific PCL6 package. Avoid HP Universal Print Driver, HP Smart, IPP class, and v4 packages.", new[] { "hp.com", "support.hp.com", "ftp.hp.com", "hpe.com" }, "hewlett-packard", "hewlett packard", "hp"),
+                new VendorDriverProfile("Konica Minolta", "Konica Minolta model-specific PCL driver", "https://kmbs.konicaminolta.us/support-downloads/", "Use the exact model page and select the model-specific PCL/PCL6 package. Avoid Universal PCL, PS-only, class, and v4 packages.", new[] { "konicaminolta.us", "kmbs.konicaminolta.us", "konicaminolta.com" }, "konica", "minolta", "bizhub"),
+                new VendorDriverProfile("Kyocera", "Kyocera model-specific KX/PCL driver", "https://www.kyoceradocumentsolutions.us/en/support/downloads.html", "Use the exact model page and select the model-specific KX/PCL or PCL6 package. Avoid Classic Universal, class, and v4 packages.", new[] { "kyoceradocumentsolutions.us", "kyoceradocumentsolutions.com", "kyocera.com" }, "kyocera", "ecosys", "taskalfa"),
+                new VendorDriverProfile("Lexmark", "Lexmark model-specific PCL XL driver", "https://www.lexmark.com/en_us/support/download-search.html", "Use the exact model page and select the model-specific PCL/PCL XL package. Avoid Universal Print Driver, class, and v4 packages.", new[] { "lexmark.com", "downloads.lexmark.com" }, "lexmark"),
                 new VendorDriverProfile("OKI", "OKI PCL6 Printer Driver", "https://www.oki.com/us/printing/support/drivers-and-utilities/", "Use the model-specific PCL6 driver when available. Avoid PS-only and v4 packages.", new[] { "oki.com" }, "oki", "okidata"),
                 new VendorDriverProfile("Panasonic", "Panasonic PCL Printer Driver", "https://help.na.panasonic.com/support/", "Use the model-specific PCL driver when available. Panasonic printer support is model-dependent.", new[] { "panasonic.com", "help.na.panasonic.com" }, "panasonic"),
                 new VendorDriverProfile("Pantum", "Pantum PCL6 Printer Driver", "https://global.pantum.com/support/download/driver/", "Use Pantum model-specific PCL6 packages. Avoid v4 packages.", new[] { "pantum.com", "global.pantum.com" }, "pantum"),
-                new VendorDriverProfile("Ricoh", "Ricoh PCL6 Driver for Universal Print", "https://support.ricoh.com/bb/html/dr_ut_e/rc3/model/p_i/p_i.htm", "Use Ricoh PCL6 Driver for Universal Print or model-specific PCL6. Avoid v4 packages.", new[] { "ricoh.com", "support.ricoh.com" }, "ricoh", "aficio"),
+                new VendorDriverProfile("Ricoh", "Ricoh model-specific PCL6 printer driver", "https://support.ricoh.com/bb/html/dr_ut_e/rc3/model/p_i/p_i.htm", "Use the exact model page and select the model-specific PCL6 package. Avoid PCL6 Driver for Universal Print, class, and v4 packages.", new[] { "ricoh.com", "support.ricoh.com" }, "ricoh", "aficio"),
                 new VendorDriverProfile("Riso", "RISO PCL Printer Driver", "https://www.riso.com/support/", "Use the model-specific PCL driver when the device supports PCL. Avoid GDI-only and v4 packages.", new[] { "riso.com" }, "riso"),
-                new VendorDriverProfile("Savin", "Savin PCL6 Driver for Universal Print", "https://support.ricoh.com/bb/html/dr_ut_e/rc3/model/p_i/p_i.htm", "Savin devices usually share Ricoh driver families. Use PCL6 Universal or model-specific PCL6.", new[] { "ricoh.com", "support.ricoh.com" }, "savin"),
-                new VendorDriverProfile("Sharp", "Sharp Universal Print Driver PCL6", "https://global.sharp/restricted/products/copier/downloads/search/us/detail/018282/download.html", "Use Sharp Universal Print Driver PCL6 or model-specific PCL6. Avoid v4 packages.", new[] { "sharpusa.com", "sharp.com", "global.sharp" }, "sharp"),
-                new VendorDriverProfile("Toshiba", "Toshiba Universal Printer 2 PCL6", "https://business.toshiba.com/support/downloads", "Use Toshiba Universal Printer 2 PCL6 or model-specific PCL6. Avoid v4 packages.", new[] { "toshiba.com", "business.toshiba.com" }, "toshiba", "e-studio"),
-                new VendorDriverProfile("Xerox", "Xerox Global Print Driver PCL6", "https://www.support.xerox.com/", "Use Xerox Global Print Driver PCL6 or model-specific PCL6. Avoid v4 packages.", new[] { "xerox.com", "support.xerox.com" }, "xerox")
+                new VendorDriverProfile("Savin", "Savin model-specific PCL6 printer driver", "https://support.ricoh.com/bb/html/dr_ut_e/rc3/model/p_i/p_i.htm", "Savin devices usually share Ricoh driver families. Use the exact model page and select the model-specific PCL6 package. Avoid universal and v4 packages.", new[] { "ricoh.com", "support.ricoh.com" }, "savin"),
+                new VendorDriverProfile("Sharp", "Sharp model-specific PCL6 printer driver", "https://global.sharp/restricted/products/copier/downloads/search/us/detail/018282/download.html", "Use the exact model page and select the model-specific PCL6 package. Avoid Universal Print Driver, class, and v4 packages.", new[] { "sharpusa.com", "sharp.com", "global.sharp" }, "sharp"),
+                new VendorDriverProfile("Toshiba", "Toshiba model-specific PCL6 printer driver", "https://business.toshiba.com/support/downloads", "Use the exact model page and select the model-specific PCL6 package. Avoid Universal Printer 2, class, and v4 packages.", new[] { "toshiba.com", "business.toshiba.com" }, "toshiba", "e-studio"),
+                new VendorDriverProfile("Xerox", "Xerox model-specific PCL6 printer driver", "https://www.support.xerox.com/", "Use the exact model page and select the model-specific PCL6 package. Avoid Global Print Driver, class, and v4 packages.", new[] { "xerox.com", "support.xerox.com" }, "xerox")
             };
         }
     }
@@ -164,8 +169,8 @@ namespace Printervention
             Vendor = "Unknown";
             ModelQuery = model;
             RecommendedDriver = "Unknown PCL6 printer driver";
-            SupportUrl = "https://www.google.com/search?q=" + Uri.EscapeDataString((model ?? "printer") + " PCL6 driver -v4");
-            Notes = "No catalog match found. Use the vendor's official support site and select a PCL/PCL6 package that is not v4.";
+            SupportUrl = "https://www.google.com/search?q=" + Uri.EscapeDataString((model ?? "printer") + " model-specific PCL6 driver -v4 -universal");
+            Notes = "No catalog match found. Use the vendor's official support site and select a model-specific PCL/PCL6 package that is not universal and not v4.";
             AuthorizedDomains = new string[0];
         }
 
