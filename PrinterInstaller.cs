@@ -115,7 +115,7 @@ namespace Printervention
             EnsureTcpIpPort(portName, parsedIp.ToString());
             EnsurePrinterDoesNotExist(printerName.Trim());
 
-            RunPowerShell("Add-Printer -Name " + PsQuote(printerName.Trim()) + " -DriverName " + PsQuote(normalizedDriverName) + " -PortName " + PsQuote(portName), true);
+            CreatePrinterQueueWithFallbacks(printerName.Trim(), portName, normalizedDriverName);
             ApplyPrinterDefaults(printerName.Trim());
         }
 
@@ -180,13 +180,145 @@ namespace Printervention
 
         private static void EnsurePrinterDoesNotExist(string printerName)
         {
+            if (PrinterExists(printerName))
+            {
+                throw new InvalidOperationException("A printer queue with that name already exists.");
+            }
+        }
+
+        private static bool PrinterExists(string printerName)
+        {
             using (var searcher = new ManagementObjectSearcher("SELECT Name FROM Win32_Printer WHERE Name='" + EscapeWql(printerName) + "'"))
             {
-                if (searcher.Get().Count > 0)
+                return searcher.Get().Count > 0;
+            }
+        }
+
+        private static void CreatePrinterQueueWithFallbacks(string printerName, string portName, string driverName)
+        {
+            var attempted = new List<string>();
+            Exception firstError = null;
+
+            // Vendor packages can expose one friendly model name in the UI and a different exact
+            // print-driver name to Add-Printer, especially Ricoh-family packages.
+            foreach (var candidate in ResolveInstalledDriverNameCandidates(driverName))
+            {
+                try
                 {
-                    throw new InvalidOperationException("A printer queue with that name already exists.");
+                    attempted.Add("Add-Printer: " + candidate);
+                    RunPowerShell("Add-Printer -Name " + PsQuote(printerName) + " -DriverName " + PsQuote(candidate) + " -PortName " + PsQuote(portName), true);
+                    if (PrinterExists(printerName))
+                    {
+                        return;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    if (firstError == null)
+                    {
+                        firstError = ex;
+                    }
                 }
             }
+
+            foreach (var candidate in ResolveInstalledDriverNameCandidates(driverName))
+            {
+                attempted.Add("PrintUI: " + candidate);
+                TryCreateQueueWithPrintUi(printerName, portName, candidate, false);
+                if (PrinterExists(printerName))
+                {
+                    return;
+                }
+
+                TryCreateQueueWithPrintUi(printerName, portName, candidate, true);
+                if (PrinterExists(printerName))
+                {
+                    return;
+                }
+            }
+
+            var message = new StringBuilder();
+            message.AppendLine("Windows could not create the printer queue with the selected driver.");
+            message.AppendLine();
+            message.AppendLine("Tried:");
+            foreach (var item in attempted.Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                message.AppendLine("- " + item);
+            }
+
+            if (firstError != null)
+            {
+                message.AppendLine();
+                message.AppendLine("First Windows error:");
+                message.AppendLine(firstError.Message);
+            }
+
+            throw new InvalidOperationException(message.ToString().Trim());
+        }
+
+        private static IEnumerable<string> ResolveInstalledDriverNameCandidates(string driverName)
+        {
+            var normalizedDriverName = NormalizeDriverName(driverName);
+            var candidates = new List<string> { normalizedDriverName };
+
+            foreach (var installedName in GetInstalledPrinterDriverNames())
+            {
+                var normalizedInstalledName = NormalizeDriverName(installedName);
+                if (normalizedInstalledName.Equals(normalizedDriverName, StringComparison.OrdinalIgnoreCase) ||
+                    installedName.Equals(normalizedDriverName, StringComparison.OrdinalIgnoreCase))
+                {
+                    candidates.Add(installedName);
+                    candidates.Add(normalizedInstalledName);
+                }
+            }
+
+            return candidates
+                .Where(candidate => !string.IsNullOrWhiteSpace(candidate))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        private static IEnumerable<string> GetInstalledPrinterDriverNames()
+        {
+            var names = new List<string>();
+
+            var powerShellOutput = RunProcessWithOutput("powershell.exe", "-NoProfile -ExecutionPolicy Bypass -Command " + Quote("Get-PrinterDriver | Select-Object -ExpandProperty Name"), false);
+            foreach (var line in SplitLines(powerShellOutput))
+            {
+                if (DriverCatalog.IsAllowedDriverName(line))
+                {
+                    names.Add(line.Trim());
+                }
+            }
+
+            using (var searcher = new ManagementObjectSearcher("SELECT Name FROM Win32_PrinterDriver"))
+            {
+                foreach (ManagementObject driver in searcher.Get())
+                {
+                    var name = Convert.ToString(driver["Name"]);
+                    if (DriverCatalog.IsAllowedDriverName(NormalizeDriverName(name)))
+                    {
+                        names.Add(name);
+                    }
+                }
+            }
+
+            return names;
+        }
+
+        private static void TryCreateQueueWithPrintUi(string printerName, string portName, string driverName, bool includeInboxInf)
+        {
+            var arguments = "printui.dll,PrintUIEntry /if /b " + Quote(printerName) +
+                " /r " + Quote(portName) +
+                " /m " + Quote(driverName);
+
+            if (includeInboxInf)
+            {
+                var inboxInf = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "inf", "ntprint.inf");
+                arguments += " /f " + Quote(inboxInf);
+            }
+
+            RunProcessWithOutput("rundll32.exe", arguments, false);
         }
 
         private static void RunPowerShell(string command, bool throwOnError)
@@ -277,6 +409,18 @@ namespace Printervention
             return output.IndexOf("Driver package added successfully", StringComparison.OrdinalIgnoreCase) >= 0 ||
                 output.IndexOf("Driver package installed", StringComparison.OrdinalIgnoreCase) >= 0 ||
                 output.IndexOf("Published Name", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static IEnumerable<string> SplitLines(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return new string[0];
+            }
+
+            return text.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(line => line.Trim())
+                .Where(line => !string.IsNullOrWhiteSpace(line));
         }
 
         private static void RegisterMatchingPrintDrivers(string infFile, string preferredModel, DriverStagingSummary result)

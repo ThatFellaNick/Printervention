@@ -300,7 +300,7 @@ namespace Printervention
             }
 
             if (!string.IsNullOrWhiteSpace(preferredVendor) &&
-                driverName.IndexOf(preferredVendor, StringComparison.OrdinalIgnoreCase) >= 0)
+                DriverCatalog.IsVendorFamilyMatch(preferredVendor, driverName))
             {
                 score += 50;
             }
@@ -308,13 +308,6 @@ namespace Printervention
             if (driverName.IndexOf("PCL", StringComparison.OrdinalIgnoreCase) >= 0)
             {
                 score += 10;
-            }
-
-            if (driverName.IndexOf("Gestetner", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                driverName.IndexOf("Lanier", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                driverName.IndexOf("Savin", StringComparison.OrdinalIgnoreCase) >= 0)
-            {
-                score -= 15;
             }
 
             return score;

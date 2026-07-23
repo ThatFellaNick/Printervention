@@ -82,6 +82,44 @@ namespace Printervention
             return name.Contains("pcl") || LooksLikeModelSpecificDriver(driverName, preferredModel);
         }
 
+        public static bool IsVendorFamilyMatch(string preferredVendor, string driverName)
+        {
+            if (string.IsNullOrWhiteSpace(preferredVendor) || string.IsNullOrWhiteSpace(driverName))
+            {
+                return false;
+            }
+
+            return GetVendorFamilyAliases(preferredVendor)
+                .Any(alias => driverName.IndexOf(alias, StringComparison.OrdinalIgnoreCase) >= 0);
+        }
+
+        public static string[] GetVendorFamilyAliases(string vendor)
+        {
+            if (IsRicohFamilyName(vendor))
+            {
+                return new[] { "Ricoh", "Savin", "Lanier", "Gestetner", "Nashuatec", "Rex-Rotary", "Aficio" };
+            }
+
+            return string.IsNullOrWhiteSpace(vendor) ? new string[0] : new[] { vendor };
+        }
+
+        private static bool IsRicohFamilyName(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return false;
+            }
+
+            var lowered = value.ToLowerInvariant();
+            return lowered.Contains("ricoh") ||
+                lowered.Contains("savin") ||
+                lowered.Contains("lanier") ||
+                lowered.Contains("gestetner") ||
+                lowered.Contains("nashuatec") ||
+                lowered.Contains("rex-rotary") ||
+                lowered.Contains("aficio");
+        }
+
         private static bool LooksLikeModelSpecificDriver(string driverName, string preferredModel)
         {
             if (string.IsNullOrWhiteSpace(preferredModel))
@@ -115,9 +153,9 @@ namespace Printervention
                 new VendorDriverProfile("OKI", "OKI PCL6 Printer Driver", "https://www.oki.com/us/printing/support/drivers-and-utilities/", "Use the model-specific PCL6 driver when available. Avoid PS-only and v4 packages.", new[] { "oki.com" }, "oki", "okidata"),
                 new VendorDriverProfile("Panasonic", "Panasonic PCL Printer Driver", "https://help.na.panasonic.com/support/", "Use the model-specific PCL driver when available. Panasonic printer support is model-dependent.", new[] { "panasonic.com", "help.na.panasonic.com" }, "panasonic"),
                 new VendorDriverProfile("Pantum", "Pantum PCL6 Printer Driver", "https://global.pantum.com/support/download/driver/", "Use Pantum model-specific PCL6 packages. Avoid v4 packages.", new[] { "pantum.com", "global.pantum.com" }, "pantum"),
-                new VendorDriverProfile("Ricoh", "Ricoh model-specific PCL6 printer driver", "https://www.ricoh-usa.com/en/support-and-download", "Use the exact model page and select the model-specific PCL6 package. Avoid PCL6 Driver for Universal Print, class, and v4 packages.", new[] { "ricoh.com", "support.ricoh.com", "ricoh-usa.com" }, "ricoh", "aficio"),
+                new VendorDriverProfile("Ricoh", "Ricoh model-specific PCL6 printer driver", "https://www.ricoh-usa.com/en/support-and-download", "Use the exact model page and select the model-specific PCL6 package. Avoid PCL6 Driver for Universal Print, class, and v4 packages. Ricoh-family packages may register matching drivers under Savin, Lanier, or Gestetner names.", new[] { "ricoh.com", "support.ricoh.com", "ricoh-usa.com" }, "ricoh", "aficio", "gestetner", "lanier", "nashuatec", "rex-rotary"),
                 new VendorDriverProfile("Riso", "RISO PCL Printer Driver", "https://www.riso.com/support/", "Use the model-specific PCL driver when the device supports PCL. Avoid GDI-only and v4 packages.", new[] { "riso.com" }, "riso"),
-                new VendorDriverProfile("Savin", "Savin model-specific PCL6 printer driver", "https://www.ricoh-usa.com/en/support-and-download", "Savin devices usually share Ricoh driver families. Use the exact model page and select the model-specific PCL6 package. Avoid universal and v4 packages.", new[] { "ricoh.com", "support.ricoh.com", "ricoh-usa.com" }, "savin"),
+                new VendorDriverProfile("Savin", "Savin model-specific PCL6 printer driver", "https://www.ricoh-usa.com/en/support-and-download", "Savin devices usually share Ricoh driver families. Use the exact model page and select the model-specific PCL6 package. Avoid universal and v4 packages.", new[] { "ricoh.com", "support.ricoh.com", "ricoh-usa.com" }, "savin", "ricoh", "gestetner", "lanier", "nashuatec", "rex-rotary", "aficio"),
                 new VendorDriverProfile("Sharp", "Sharp model-specific PCL6 printer driver", "https://global.sharp/restricted/products/copier/downloads/search/us/detail/018282/download.html", "Use the exact model page and select the model-specific PCL6 package. Avoid Universal Print Driver, class, and v4 packages.", new[] { "sharpusa.com", "sharp.com", "global.sharp" }, "sharp"),
                 new VendorDriverProfile("Toshiba", "Toshiba model-specific PCL6 printer driver", "https://business.toshiba.com/support/downloads", "Use the exact model page and select the model-specific PCL6 package. Avoid Universal Printer 2, class, and v4 packages.", new[] { "toshiba.com", "business.toshiba.com" }, "toshiba", "e-studio"),
                 new VendorDriverProfile("Xerox", "Xerox model-specific PCL6 printer driver", "https://www.support.xerox.com/", "Use the exact model page and select the model-specific PCL6 package. Avoid Global Print Driver, class, and v4 packages.", new[] { "xerox.com", "support.xerox.com" }, "xerox")
