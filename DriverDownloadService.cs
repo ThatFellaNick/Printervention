@@ -38,7 +38,7 @@ namespace Printervention
             var workingFolder = CreateWorkingFolder(recommendation);
             var packagePath = DownloadPackage(packageUrl, workingFolder);
             var extractedFolder = ExtractPackage(packagePath, workingFolder);
-            var stageOutput = _installer.StageDriverFolder(extractedFolder);
+            var stageOutput = _installer.StageDriverFolder(extractedFolder, recommendation.ModelQuery);
 
             return new DriverInstallResult(packageUrl, packagePath, extractedFolder, stageOutput);
         }

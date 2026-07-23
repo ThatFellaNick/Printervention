@@ -43,6 +43,11 @@ namespace Printervention
 
         public string StageDriverFolder(string folderPath)
         {
+            return StageDriverFolder(folderPath, null);
+        }
+
+        public string StageDriverFolder(string folderPath, string preferredModel)
+        {
             if (string.IsNullOrWhiteSpace(folderPath) || !Directory.Exists(folderPath))
             {
                 throw new ArgumentException("Choose a folder that contains the extracted driver files.", "folderPath");
@@ -65,6 +70,7 @@ namespace Printervention
                 if (IsSuccessfulPnPOutput(output))
                 {
                     result.AddSuccess(infFile, output);
+                    RegisterMatchingPrintDrivers(infFile, preferredModel, result);
                 }
                 else
                 {
@@ -260,6 +266,93 @@ namespace Printervention
                 output.IndexOf("Published Name", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
+        private static void RegisterMatchingPrintDrivers(string infFile, string preferredModel, DriverStagingSummary result)
+        {
+            var names = GetDriverNamesFromInf(infFile)
+                .Where(name => DriverCatalog.IsAllowedDriverName(name, preferredModel))
+                .OrderByDescending(name => ScoreDriverName(name, preferredModel))
+                .ToList();
+
+            foreach (var name in names.Take(3))
+            {
+                var output = TryRegisterPrintDriver(infFile, name);
+                if (IsPrintDriverRegistrationSuccess(output))
+                {
+                    result.AddRegistration(name, output);
+                    return;
+                }
+            }
+        }
+
+        private static IEnumerable<string> GetDriverNamesFromInf(string infFile)
+        {
+            foreach (var line in File.ReadLines(infFile))
+            {
+                var trimmed = line.Trim();
+                if (trimmed.StartsWith(";", StringComparison.Ordinal) || trimmed.StartsWith("[", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                var equalsIndex = trimmed.IndexOf('=');
+                if (equalsIndex <= 0)
+                {
+                    continue;
+                }
+
+                var name = trimmed.Substring(0, equalsIndex).Trim().Trim('"');
+                if (name.Length > 2)
+                {
+                    yield return name;
+                }
+            }
+        }
+
+        private static int ScoreDriverName(string driverName, string preferredModel)
+        {
+            var score = 0;
+            var lowered = driverName.ToLowerInvariant();
+            if (lowered.Contains("pcl 6") || lowered.Contains("pcl6"))
+            {
+                score += 30;
+            }
+
+            if (!string.IsNullOrWhiteSpace(preferredModel))
+            {
+                foreach (var term in preferredModel.Split(new[] { ' ', '-', '_' }, StringSplitOptions.RemoveEmptyEntries))
+                {
+                    if (term.Any(char.IsDigit) && driverName.IndexOf(term, StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        score += 20;
+                    }
+                }
+            }
+
+            return score;
+        }
+
+        private static string TryRegisterPrintDriver(string infFile, string driverName)
+        {
+            var architecture = Environment.Is64BitOperatingSystem ? "x64" : "Intel";
+            var arguments = "printui.dll,PrintUIEntry /ia /m " + Quote(driverName) +
+                " /h " + Quote(architecture) +
+                " /v " + Quote("Type 3 - User Mode") +
+                " /f " + Quote(infFile);
+            return RunProcessWithOutput("rundll32.exe", arguments, false);
+        }
+
+        private static bool IsPrintDriverRegistrationSuccess(string output)
+        {
+            if (string.IsNullOrWhiteSpace(output))
+            {
+                // PrintUI often returns success with no console output.
+                return true;
+            }
+
+            return output.IndexOf("error", StringComparison.OrdinalIgnoreCase) < 0 &&
+                output.IndexOf("failed", StringComparison.OrdinalIgnoreCase) < 0;
+        }
+
         private static void AppendLine(StringBuilder builder, string value)
         {
             if (!string.IsNullOrWhiteSpace(value))
@@ -273,6 +366,7 @@ namespace Printervention
     {
         private readonly List<string> _successes = new List<string>();
         private readonly List<string> _failures = new List<string>();
+        private readonly List<string> _registrations = new List<string>();
 
         public int SuccessCount
         {
@@ -282,6 +376,11 @@ namespace Printervention
         public int FailureCount
         {
             get { return _failures.Count; }
+        }
+
+        public int RegistrationCount
+        {
+            get { return _registrations.Count; }
         }
 
         public void AddSuccess(string infFile, string output)
@@ -294,12 +393,29 @@ namespace Printervention
             _failures.Add(Path.GetFileName(infFile) + Environment.NewLine + TrimOutput(output));
         }
 
+        public void AddRegistration(string driverName, string output)
+        {
+            _registrations.Add(driverName + Environment.NewLine + TrimOutput(output));
+        }
+
         public string BuildMessage()
         {
             var builder = new StringBuilder();
             builder.AppendLine("Driver staging finished.");
             builder.AppendLine("Succeeded: " + SuccessCount);
+            builder.AppendLine("Registered print drivers: " + RegistrationCount);
             builder.AppendLine("Failed or skipped: " + FailureCount);
+
+            if (_registrations.Count > 0)
+            {
+                builder.AppendLine();
+                builder.AppendLine("Registered:");
+                foreach (var registration in _registrations.Take(5))
+                {
+                    builder.AppendLine(registration);
+                    builder.AppendLine();
+                }
+            }
 
             if (_failures.Count > 0)
             {

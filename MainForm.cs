@@ -378,7 +378,7 @@ namespace Printervention
                 SetBusy(true, "Staging driver files...");
                 try
                 {
-                    var result = _installer.StageDriverFolder(dialog.SelectedPath);
+                    var result = _installer.StageDriverFolder(dialog.SelectedPath, _modelTextBox.Text);
                     RefreshInstalledDrivers(_modelTextBox.Text);
                     SetStatus("Driver installed.");
                     MessageBox.Show(this, string.IsNullOrWhiteSpace(result) ? "Driver installed." : result, "Driver install finished", MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -419,7 +419,7 @@ namespace Printervention
                 if (_installedDriverComboBox.SelectedItem == null)
                 {
                     SetStatus("Install stopped before a model-specific driver was selected.");
-                    MessageBox.Show(this, "The driver package was staged, but I could not identify the matching model-specific driver name in Windows. Choose the driver from Installed Driver and run install again.", "Driver selection needed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    MessageBox.Show(this, "The driver package was staged, but Windows did not expose a matching print driver name for this model. Try Refresh Installed Drivers. If the list is still empty, the vendor package may require its own installer before Windows will register the print driver.", "Driver registration needed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return;
                 }
 
