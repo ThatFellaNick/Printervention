@@ -7,9 +7,11 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing.Printing;
+using System.IO;
 using System.Linq;
 using System.Management;
 using System.Net;
+using System.Text;
 
 namespace Printervention
 {
@@ -34,6 +36,22 @@ namespace Printervention
             return drivers.OrderBy(name => name).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         }
 
+        public string StageDriverFolder(string folderPath)
+        {
+            if (string.IsNullOrWhiteSpace(folderPath) || !Directory.Exists(folderPath))
+            {
+                throw new ArgumentException("Choose a folder that contains the extracted driver files.", "folderPath");
+            }
+
+            if (!Directory.EnumerateFiles(folderPath, "*.inf", SearchOption.AllDirectories).Any())
+            {
+                throw new InvalidOperationException("No INF driver files were found in that folder. Extract the vendor driver package first, then choose the extracted folder.");
+            }
+
+            // pnputil stages matching INF packages from the selected folder into the Windows driver store.
+            return RunProcessWithOutput("pnputil.exe", "/add-driver " + Quote(Path.Combine(folderPath, "*.inf")) + " /subdirs /install", true);
+        }
+
         public void CreateQueue(string ipAddress, string printerName, string driverName)
         {
             if (string.IsNullOrWhiteSpace(ipAddress))
@@ -54,7 +72,7 @@ namespace Printervention
 
             if (!DriverCatalog.IsAllowedDriverName(driverName))
             {
-                throw new InvalidOperationException("Choose an installed model-specific PCL/PCL6 driver that is not universal and not v4.");
+                throw new InvalidOperationException("Choose an installed model-specific PCL/PCL6 driver that is not universal and not v4. If the dropdown is empty, download and extract the vendor package, then use Stage Driver Folder.");
             }
 
             var portName = "IP_" + parsedIp;
@@ -137,19 +155,41 @@ namespace Printervention
 
         private static void RunPowerShell(string command, bool throwOnError)
         {
-            var process = Process.Start(new ProcessStartInfo
-            {
-                FileName = "powershell.exe",
-                Arguments = "-NoProfile -ExecutionPolicy Bypass -Command " + Quote(command),
-                UseShellExecute = false,
-                CreateNoWindow = true
-            });
+            RunProcessWithOutput("powershell.exe", "-NoProfile -ExecutionPolicy Bypass -Command " + Quote(command), throwOnError);
+        }
 
+        private static string RunProcessWithOutput(string fileName, string arguments, bool throwOnError)
+        {
+            var output = new StringBuilder();
+            var process = new Process
+            {
+                StartInfo = new ProcessStartInfo
+                {
+                    FileName = fileName,
+                    Arguments = arguments,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true
+                }
+            };
+
+            process.OutputDataReceived += (sender, args) => AppendLine(output, args.Data);
+            process.ErrorDataReceived += (sender, args) => AppendLine(output, args.Data);
+            process.Start();
+            process.BeginOutputReadLine();
+            process.BeginErrorReadLine();
             process.WaitForExit();
+
+            var text = output.ToString().Trim();
             if (throwOnError && process.ExitCode != 0)
             {
-                throw new InvalidOperationException("Windows could not create the printer queue. Run as administrator and confirm the driver is installed.");
+                throw new InvalidOperationException(string.IsNullOrWhiteSpace(text)
+                    ? "Windows could not complete the printer driver action. Run as administrator and confirm the driver package is valid."
+                    : text);
             }
+
+            return text;
         }
 
         private static string Quote(string value)
@@ -165,6 +205,14 @@ namespace Printervention
         private static string EscapeWql(string value)
         {
             return value.Replace("\\", "\\\\").Replace("'", "\\'");
+        }
+
+        private static void AppendLine(StringBuilder builder, string value)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                builder.AppendLine(value);
+            }
         }
     }
 }

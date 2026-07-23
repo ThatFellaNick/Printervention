@@ -4,6 +4,7 @@
 */
 
 using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -39,27 +40,56 @@ namespace Printervention
 
         private static async Task<PrinterIdentity> QuerySnmpAsync(IPAddress ipAddress)
         {
-            // sysDescr.0 is widely supported and often includes vendor, model, and firmware.
-            var sysDescrPacket = SnmpGetPacket("1.3.6.1.2.1.1.1.0");
-            var printer = new PrinterIdentity { IpAddress = ipAddress.ToString(), Source = "SNMP" };
-
-            try
+            var probes = new[]
             {
-                using (var udp = new UdpClient())
+                new SnmpProbe("Printer name", "1.3.6.1.2.1.43.5.1.1.16.1"),
+                new SnmpProbe("System name", "1.3.6.1.2.1.1.5.0"),
+                new SnmpProbe("Device description", "1.3.6.1.2.1.25.3.2.1.3.1"),
+                new SnmpProbe("System description", "1.3.6.1.2.1.1.1.0")
+            };
+            var printer = new PrinterIdentity { IpAddress = ipAddress.ToString(), Source = "SNMP" };
+            var values = new List<string>();
+
+            foreach (var probe in probes)
+            {
+                try
                 {
-                    udp.Client.ReceiveTimeout = 2500;
-                    await udp.SendAsync(sysDescrPacket, sysDescrPacket.Length, new IPEndPoint(ipAddress, 161)).ConfigureAwait(false);
-                    var result = await ReceiveWithTimeoutAsync(udp, 3000).ConfigureAwait(false);
-                    printer.RawDescription = DecodeSnmpString(result.Buffer);
-                    printer.Model = CleanModel(printer.RawDescription);
+                    var value = await QuerySnmpValueAsync(ipAddress, probe.Oid).ConfigureAwait(false);
+                    if (!string.IsNullOrWhiteSpace(value))
+                    {
+                        values.Add(probe.Name + ": " + value);
+                        var cleaned = CleanModel(value);
+                        if (IsBetterModel(cleaned, printer.Model))
+                        {
+                            printer.Model = cleaned;
+                        }
+                    }
+                }
+                catch
+                {
+                    // Many printers expose only a subset of the standard identity OIDs.
                 }
             }
-            catch
+
+            printer.RawDescription = string.Join(" | ", values.ToArray());
+            if (values.Count == 0)
             {
                 printer.Source = "SNMP unavailable";
             }
 
             return printer;
+        }
+
+        private static async Task<string> QuerySnmpValueAsync(IPAddress ipAddress, string oid)
+        {
+            var packet = SnmpGetPacket(oid);
+            using (var udp = new UdpClient())
+            {
+                udp.Client.ReceiveTimeout = 2500;
+                await udp.SendAsync(packet, packet.Length, new IPEndPoint(ipAddress, 161)).ConfigureAwait(false);
+                var result = await ReceiveWithTimeoutAsync(udp, 3000).ConfigureAwait(false);
+                return DecodeSnmpString(result.Buffer);
+            }
         }
 
         private static async Task<PrinterIdentity> QueryHttpAsync(IPAddress ipAddress)
@@ -187,6 +217,38 @@ namespace Printervention
             return cleaned;
         }
 
+        private static bool IsBetterModel(string candidate, string current)
+        {
+            if (string.IsNullOrWhiteSpace(candidate))
+            {
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(current))
+            {
+                return true;
+            }
+
+            return ScoreModel(candidate) > ScoreModel(current);
+        }
+
+        private static int ScoreModel(string model)
+        {
+            var score = model.Length;
+            if (Regex.IsMatch(model, @"\b([A-Z]{1,5}[- ]?\d{3,5}|M\d{3,5}|C\d{3,5})\b", RegexOptions.IgnoreCase))
+            {
+                score += 100;
+            }
+
+            if (model.IndexOf("Printing System", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                model.IndexOf("Document Solutions", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                score -= 75;
+            }
+
+            return score;
+        }
+
         private static byte[] Integer(int value)
         {
             return Tag(0x02, new[] { (byte)value });
@@ -245,6 +307,18 @@ namespace Printervention
 
             return output;
         }
+    }
+
+    internal sealed class SnmpProbe
+    {
+        public SnmpProbe(string name, string oid)
+        {
+            Name = name;
+            Oid = oid;
+        }
+
+        public string Name { get; private set; }
+        public string Oid { get; private set; }
     }
 
     internal sealed class PrinterIdentity

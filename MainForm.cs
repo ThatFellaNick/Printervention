@@ -27,6 +27,7 @@ namespace Printervention
         private TextBox _recommendationTextBox;
         private Button _discoverButton;
         private Button _openSupportButton;
+        private Button _stageDriverButton;
         private Button _refreshDriversButton;
         private Button _testPlanButton;
         private Button _createQueueButton;
@@ -103,6 +104,8 @@ namespace Printervention
             var actionBar = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, FlowDirection = FlowDirection.LeftToRight };
             _openSupportButton = new Button { Text = "Open Driver Page", AutoSize = true, Margin = new Padding(0, 6, 8, 8) };
             _openSupportButton.Click += (sender, args) => OpenSupportPage();
+            _stageDriverButton = new Button { Text = "Stage Driver Folder", AutoSize = true, Margin = new Padding(0, 6, 8, 8) };
+            _stageDriverButton.Click += (sender, args) => StageDriverFolder();
             _refreshDriversButton = new Button { Text = "Refresh Installed Drivers", AutoSize = true, Margin = new Padding(0, 6, 8, 8) };
             _refreshDriversButton.Click += (sender, args) => RefreshInstalledDrivers();
             _testPlanButton = new Button { Text = "Test Plan", AutoSize = true, Margin = new Padding(0, 6, 8, 8) };
@@ -110,6 +113,7 @@ namespace Printervention
             _createQueueButton = new Button { Text = "Create Queue", AutoSize = true, Margin = new Padding(0, 6, 8, 8) };
             _createQueueButton.Click += (sender, args) => CreateQueue();
             actionBar.Controls.Add(_openSupportButton);
+            actionBar.Controls.Add(_stageDriverButton);
             actionBar.Controls.Add(_refreshDriversButton);
             actionBar.Controls.Add(_testPlanButton);
             actionBar.Controls.Add(_createQueueButton);
@@ -230,6 +234,7 @@ namespace Printervention
                 "- Use model-specific drivers when available; avoid universal, global, and generic drivers." + Environment.NewLine +
                 "- Do not use PCL v4, class drivers, IPP class drivers, or vendor app-only packages." + Environment.NewLine +
                 "- Download installers only from the authorized vendor domains shown above." + Environment.NewLine +
+                "- After download, extract the package and use Stage Driver Folder before Create Queue." + Environment.NewLine +
                 "- Use Test Plan when you do not have a printer connected." + Environment.NewLine +
                 "- After queue creation, Printervention attempts to set black-and-white and one-sided defaults." + Environment.NewLine + Environment.NewLine +
                 _currentRecommendation.Notes;
@@ -239,12 +244,50 @@ namespace Printervention
         {
             try
             {
+                if (!string.IsNullOrWhiteSpace(_currentRecommendation.ModelQuery))
+                {
+                    Clipboard.SetText(_currentRecommendation.ModelQuery);
+                    SetStatus("Copied the model/search text to the clipboard, then opened the driver page.");
+                }
+
                 _currentRecommendation.OpenSupportPage();
             }
             catch (Exception ex)
             {
                 SetStatus(ex.Message);
                 MessageBox.Show(this, ex.Message, "Blocked URL", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        }
+
+        private void StageDriverFolder()
+        {
+            using (var dialog = new FolderBrowserDialog())
+            {
+                dialog.Description = "Choose the extracted vendor driver folder that contains INF files.";
+                dialog.ShowNewFolderButton = false;
+
+                if (dialog.ShowDialog(this) != DialogResult.OK)
+                {
+                    return;
+                }
+
+                SetBusy(true, "Staging driver files...");
+                try
+                {
+                    var result = _installer.StageDriverFolder(dialog.SelectedPath);
+                    RefreshInstalledDrivers();
+                    SetStatus("Driver folder staged. Pick the model-specific non-v4 PCL driver, then create the queue.");
+                    MessageBox.Show(this, string.IsNullOrWhiteSpace(result) ? "Driver folder staged." : result, "Driver staging finished", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+                catch (Exception ex)
+                {
+                    SetStatus(ex.Message);
+                    MessageBox.Show(this, ex.Message, "Driver staging failed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
+                finally
+                {
+                    SetBusy(false, null);
+                }
             }
         }
 
@@ -325,6 +368,7 @@ namespace Printervention
         {
             _discoverButton.Enabled = !busy;
             _openSupportButton.Enabled = !busy;
+            _stageDriverButton.Enabled = !busy;
             _refreshDriversButton.Enabled = !busy;
             _testPlanButton.Enabled = !busy;
             _createQueueButton.Enabled = !busy;
