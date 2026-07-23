@@ -158,7 +158,7 @@ namespace Printervention
             RunProcessWithOutput("powershell.exe", "-NoProfile -ExecutionPolicy Bypass -Command " + Quote(command), throwOnError);
         }
 
-        private static string RunProcessWithOutput(string fileName, string arguments, bool throwOnError)
+        public static string RunProcessWithOutput(string fileName, string arguments, bool throwOnError)
         {
             var output = new StringBuilder();
             var process = new Process

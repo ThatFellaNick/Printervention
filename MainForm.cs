@@ -17,6 +17,7 @@ namespace Printervention
         private readonly DriverCatalog _catalog = new DriverCatalog();
         private readonly PrinterDiscovery _discovery = new PrinterDiscovery();
         private readonly PrinterInstaller _installer = new PrinterInstaller();
+        private readonly DriverDownloadService _downloadService;
 
         private TextBox _ipAddressTextBox;
         private TextBox _modelTextBox;
@@ -37,6 +38,7 @@ namespace Printervention
 
         public MainForm()
         {
+            _downloadService = new DriverDownloadService(_installer);
             Text = "Printervention";
             MinimumSize = new Size(780, 560);
             StartPosition = FormStartPosition.CenterScreen;
@@ -300,30 +302,64 @@ namespace Printervention
 
         private void InstallDriver()
         {
+            InstallDriverWorkflow(true);
+        }
+
+        private bool InstallDriverWorkflow(bool allowManualFallback)
+        {
+            SetBusy(true, "Trying automatic driver install...");
             try
             {
-                CopyModelSearchText();
-                _currentRecommendation.OpenSupportPage();
-                var response = MessageBox.Show(
-                    this,
-                    "Download the model-specific PCL/PCL6 driver from the vendor page, extract it if needed, then click OK to choose the extracted driver folder.",
-                    "Install driver",
-                    MessageBoxButtons.OKCancel,
-                    MessageBoxIcon.Information);
-
-                if (response == DialogResult.OK)
-                {
-                    StageDriverFolder();
-                }
+                var result = _downloadService.InstallFromRecommendation(_currentRecommendation);
+                RefreshInstalledDrivers();
+                SetStatus("Driver installed automatically. Pick the driver, then install the printer.");
+                MessageBox.Show(this, BuildInstallResultMessage(result), "Driver installed", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return _installedDriverComboBox.Items.Count > 0;
             }
             catch (Exception ex)
             {
-                SetStatus(ex.Message);
-                MessageBox.Show(this, ex.Message, "Driver install failed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                SetStatus("Automatic install needs help: " + ex.Message);
+                return allowManualFallback && PromptManualDriverInstall(ex.Message);
+            }
+            finally
+            {
+                SetBusy(false, null);
             }
         }
 
-        private void StageDriverFolder()
+        private bool PromptManualDriverInstall(string reason)
+        {
+            CopyModelSearchText();
+            _currentRecommendation.OpenSupportPage();
+            var response = MessageBox.Show(
+                this,
+                "I could not finish the driver install automatically." + Environment.NewLine + Environment.NewLine +
+                reason + Environment.NewLine + Environment.NewLine +
+                "Download the model-specific PCL/PCL6 driver from the official page, extract it if needed, then click OK to choose the extracted driver folder.",
+                "Manual driver install",
+                MessageBoxButtons.OKCancel,
+                MessageBoxIcon.Information);
+
+            if (response == DialogResult.OK)
+            {
+                return StageDriverFolder();
+            }
+
+            return false;
+        }
+
+        private static string BuildInstallResultMessage(DriverInstallResult result)
+        {
+            return
+                "Driver package downloaded and staged." + Environment.NewLine + Environment.NewLine +
+                "Downloaded from:" + Environment.NewLine +
+                result.PackageUrl + Environment.NewLine + Environment.NewLine +
+                "Extracted to:" + Environment.NewLine +
+                result.ExtractedFolder + Environment.NewLine + Environment.NewLine +
+                "Refresh/select the model-specific PCL driver, then click Install Printer.";
+        }
+
+        private bool StageDriverFolder()
         {
             using (var dialog = new FolderBrowserDialog())
             {
@@ -332,7 +368,7 @@ namespace Printervention
 
                 if (dialog.ShowDialog(this) != DialogResult.OK)
                 {
-                    return;
+                    return false;
                 }
 
                 SetBusy(true, "Staging driver files...");
@@ -342,11 +378,13 @@ namespace Printervention
                     RefreshInstalledDrivers();
                     SetStatus("Driver installed. Pick the model-specific non-v4 PCL driver, then install the printer.");
                     MessageBox.Show(this, string.IsNullOrWhiteSpace(result) ? "Driver installed." : result, "Driver install finished", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return _installedDriverComboBox.Items.Count > 0;
                 }
                 catch (Exception ex)
                 {
                     SetStatus(ex.Message);
                     MessageBox.Show(this, ex.Message, "Driver staging failed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return false;
                 }
                 finally
                 {
@@ -368,6 +406,12 @@ namespace Printervention
         {
             try
             {
+                if (_installedDriverComboBox.SelectedItem == null && !InstallDriverWorkflow(true))
+                {
+                    SetStatus("Install stopped before a model-specific driver was selected.");
+                    return;
+                }
+
                 var driverName = Convert.ToString(_installedDriverComboBox.SelectedItem);
                 _installer.CreateQueue(_ipAddressTextBox.Text, _printerNameTextBox.Text, driverName);
                 SetStatus("Queue created. Check printing preferences if this driver exposes vendor-specific color or duplex defaults.");

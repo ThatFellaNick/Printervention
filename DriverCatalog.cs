@@ -218,7 +218,7 @@ namespace Printervention
                 var ricohSlug = BuildRicohModelSlug(model);
                 if (!string.IsNullOrWhiteSpace(ricohSlug))
                 {
-                    return "https://support.ricoh.com/bb/html/dr_ut_e/rc3/model/" + ricohSlug + "/" + ricohSlug + ".htm";
+                    return "https://support.ricoh.com/bb/html/dr_ut_e/re1/model/" + ricohSlug + "/" + ricohSlug + "es.htm";
                 }
             }
 

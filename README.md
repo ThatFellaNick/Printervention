@@ -13,7 +13,8 @@ The first version targets .NET Framework 4.8 so it can run on commonly managed W
 - Shows an authorized vendor domain allowlist for driver downloads.
 - Creates a Standard TCP/IP printer port.
 - Can create a printer queue with a selected installed driver.
-- Has an `Install Driver` flow for staging extracted vendor driver folders that contain `.inf` files.
+- Has an `Install Driver` flow that tries automatic official download, extraction, and driver staging before asking for a folder.
+- `Install Printer` attempts driver install first when no usable driver is selected.
 - Includes a Test Plan button for no-printer validation.
 - Attempts to default the queue to black-and-white and one-sided printing.
 
@@ -53,10 +54,10 @@ Hardware is still needed later to verify live SNMP/HTTP discovery, actual driver
 1. Enter the printer IP and click `Find Printer`.
 2. Confirm or correct the brand and model.
 3. Click `Open Model Driver Page` or `Install Driver`. Printervention copies the model/search text to the clipboard first.
-4. On the vendor page, choose the exact model and download a model-specific PCL/PCL6 driver package.
-5. Extract the package if it downloads as a ZIP or self-extracting installer.
-6. In `Install Driver`, choose the extracted folder that contains `.inf` files.
-7. Pick the newly installed model-specific non-v4 PCL driver from `Installed Driver`.
+4. Let `Install Driver` try to download, extract, and stage the model-specific PCL/PCL6 package automatically.
+5. If automatic install cannot finish, use the opened vendor page to download the package and extract it.
+6. When prompted, choose the extracted folder that contains `.inf` files.
+7. Pick the newly installed model-specific non-v4 PCL driver from `Installed Driver`, or click `Install Printer` and let Printervention try the driver-install step first.
 8. Click `Install Printer`.
 
 If `Installed Driver` is empty, Windows does not have a matching model-specific PCL driver staged yet. Creating the queue requires a real installed driver name, not just the recommendation text shown in the test plan.
