@@ -31,7 +31,6 @@ namespace Printervention
         private Button _installDriverButton;
         private Button _refreshDriversButton;
         private Button _testPlanButton;
-        private Button _createQueueButton;
         private DriverRecommendation _currentRecommendation;
         private bool _settingSuggestedQueueName;
         private string _lastSuggestedQueueName;
@@ -115,19 +114,16 @@ namespace Printervention
             var actionBar = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, FlowDirection = FlowDirection.LeftToRight };
             _openSupportButton = new Button { Text = "Open Model Driver Page", AutoSize = true, Margin = new Padding(0, 6, 8, 8) };
             _openSupportButton.Click += (sender, args) => OpenSupportPage();
-            _installDriverButton = new Button { Text = "Install Driver", AutoSize = true, Margin = new Padding(0, 6, 8, 8) };
-            _installDriverButton.Click += (sender, args) => InstallDriver();
+            _installDriverButton = new Button { Text = "Install Driver and Print Object", AutoSize = true, Margin = new Padding(0, 6, 8, 8) };
+            _installDriverButton.Click += (sender, args) => InstallDriverAndPrintObject();
             _refreshDriversButton = new Button { Text = "Refresh Installed Drivers", AutoSize = true, Margin = new Padding(0, 6, 8, 8) };
             _refreshDriversButton.Click += (sender, args) => RefreshInstalledDrivers();
             _testPlanButton = new Button { Text = "Test Plan", AutoSize = true, Margin = new Padding(0, 6, 8, 8) };
             _testPlanButton.Click += (sender, args) => TestPlan();
-            _createQueueButton = new Button { Text = "Install Printer", AutoSize = true, Margin = new Padding(0, 6, 8, 8) };
-            _createQueueButton.Click += (sender, args) => CreateQueue();
             actionBar.Controls.Add(_openSupportButton);
             actionBar.Controls.Add(_installDriverButton);
             actionBar.Controls.Add(_refreshDriversButton);
             actionBar.Controls.Add(_testPlanButton);
-            actionBar.Controls.Add(_createQueueButton);
             root.Controls.Add(actionBar);
 
             _recommendationTextBox = new TextBox
@@ -246,7 +242,7 @@ namespace Printervention
         {
             try
             {
-                var drivers = _installer.GetInstalledPclDrivers();
+                var drivers = _installer.GetInstalledPclDrivers(preferredModel);
                 _installedDriverComboBox.Items.Clear();
                 foreach (var driver in drivers)
                 {
@@ -305,7 +301,7 @@ namespace Printervention
                 "- Use model-specific drivers when available; avoid universal, global, and generic drivers." + Environment.NewLine +
                 "- Do not use PCL v4, class drivers, IPP class drivers, or vendor app-only packages." + Environment.NewLine +
                 "- Download installers only from the authorized vendor domains shown above." + Environment.NewLine +
-                "- Use Install Driver to stage the extracted vendor driver before Install Printer." + Environment.NewLine +
+                "- Use Install Driver and Print Object to stage the driver and create the Windows queue." + Environment.NewLine +
                 "- Use Test Plan when you do not have a printer connected." + Environment.NewLine +
                 "- After queue creation, Printervention attempts to set black-and-white and one-sided defaults." + Environment.NewLine + Environment.NewLine +
                 _currentRecommendation.Notes;
@@ -325,20 +321,14 @@ namespace Printervention
             }
         }
 
-        private void InstallDriver()
-        {
-            InstallDriverWorkflow(true);
-        }
-
         private bool InstallDriverWorkflow(bool allowManualFallback)
         {
             SetBusy(true, "Trying automatic driver install...");
             try
             {
-                var result = _downloadService.InstallFromRecommendation(_currentRecommendation);
+                _downloadService.InstallFromRecommendation(_currentRecommendation);
                 RefreshInstalledDrivers(_modelTextBox.Text);
-                SetStatus("Driver installed automatically. Pick the driver, then install the printer.");
-                MessageBox.Show(this, BuildInstallResultMessage(result), "Driver installed", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                SetStatus("Driver installed automatically.");
                 return _installedDriverComboBox.Items.Count > 0;
             }
             catch (Exception ex)
@@ -373,17 +363,6 @@ namespace Printervention
             return false;
         }
 
-        private static string BuildInstallResultMessage(DriverInstallResult result)
-        {
-            return
-                "Driver package downloaded and staged." + Environment.NewLine + Environment.NewLine +
-                "Downloaded from:" + Environment.NewLine +
-                result.PackageUrl + Environment.NewLine + Environment.NewLine +
-                "Extracted to:" + Environment.NewLine +
-                result.ExtractedFolder + Environment.NewLine + Environment.NewLine +
-                "Refresh/select the model-specific PCL driver, then click Install Printer.";
-        }
-
         private bool StageDriverFolder()
         {
             using (var dialog = new FolderBrowserDialog())
@@ -401,7 +380,7 @@ namespace Printervention
                 {
                     var result = _installer.StageDriverFolder(dialog.SelectedPath);
                     RefreshInstalledDrivers(_modelTextBox.Text);
-                    SetStatus("Driver installed. Pick the model-specific non-v4 PCL driver, then install the printer.");
+                    SetStatus("Driver installed.");
                     MessageBox.Show(this, string.IsNullOrWhiteSpace(result) ? "Driver installed." : result, "Driver install finished", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     return _installedDriverComboBox.Items.Count > 0;
                 }
@@ -427,25 +406,32 @@ namespace Printervention
             }
         }
 
-        private void CreateQueue()
+        private void InstallDriverAndPrintObject()
         {
             try
             {
-                if (_installedDriverComboBox.SelectedItem == null && !InstallDriverWorkflow(true))
+                if (_installedDriverComboBox.SelectedItem == null)
+                {
+                    InstallDriverWorkflow(true);
+                }
+
+                RefreshInstalledDrivers(_modelTextBox.Text);
+                if (_installedDriverComboBox.SelectedItem == null)
                 {
                     SetStatus("Install stopped before a model-specific driver was selected.");
+                    MessageBox.Show(this, "The driver package was staged, but I could not identify the matching model-specific driver name in Windows. Choose the driver from Installed Driver and run install again.", "Driver selection needed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return;
                 }
 
                 var driverName = Convert.ToString(_installedDriverComboBox.SelectedItem);
                 _installer.CreateQueue(_ipAddressTextBox.Text, _printerNameTextBox.Text, driverName);
-                SetStatus("Queue created. Check printing preferences if this driver exposes vendor-specific color or duplex defaults.");
-                MessageBox.Show(this, "Printer queue created. Defaults were set to black-and-white and one-sided where Windows allowed it.", "Queue created", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                SetStatus("Driver and print object installed.");
+                MessageBox.Show(this, "Driver and print object installed. Defaults were set to black-and-white and one-sided where Windows allowed it.", "Install complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
                 SetStatus(ex.Message);
-                MessageBox.Show(this, ex.Message, "Queue creation failed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, ex.Message, "Install failed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
         }
 
@@ -483,7 +469,7 @@ namespace Printervention
                 throw new InvalidOperationException("Enter a queue name for the test plan.");
             }
 
-            if (!DriverCatalog.IsAllowedDriverName(driverName))
+            if (!DriverCatalog.IsAllowedDriverName(driverName, _modelTextBox.Text))
             {
                 throw new InvalidOperationException("The selected or recommended driver is not a model-specific non-v4 PCL/PCL6 driver.");
             }
@@ -513,7 +499,6 @@ namespace Printervention
             _installDriverButton.Enabled = !busy;
             _refreshDriversButton.Enabled = !busy;
             _testPlanButton.Enabled = !busy;
-            _createQueueButton.Enabled = !busy;
 
             if (!string.IsNullOrWhiteSpace(status))
             {

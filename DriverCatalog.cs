@@ -58,6 +58,11 @@ namespace Printervention
 
         public static bool IsAllowedDriverName(string driverName)
         {
+            return IsAllowedDriverName(driverName, null);
+        }
+
+        public static bool IsAllowedDriverName(string driverName, string preferredModel)
+        {
             if (string.IsNullOrWhiteSpace(driverName))
             {
                 return false;
@@ -74,7 +79,24 @@ namespace Printervention
                 return false;
             }
 
-            return name.Contains("pcl");
+            return name.Contains("pcl") || LooksLikeModelSpecificDriver(driverName, preferredModel);
+        }
+
+        private static bool LooksLikeModelSpecificDriver(string driverName, string preferredModel)
+        {
+            if (string.IsNullOrWhiteSpace(preferredModel))
+            {
+                return false;
+            }
+
+            var driver = driverName.ToLowerInvariant();
+            var modelTerms = preferredModel
+                .Split(new[] { ' ', '-', '_', '/', '\\' }, StringSplitOptions.RemoveEmptyEntries)
+                .Where(term => term.Any(char.IsDigit) && term.Length >= 3)
+                .Select(term => term.ToLowerInvariant())
+                .ToArray();
+
+            return modelTerms.Any(term => driver.Contains(term));
         }
 
         private static List<VendorDriverProfile> BuildProfiles()

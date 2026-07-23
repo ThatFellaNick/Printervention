@@ -19,6 +19,11 @@ namespace Printervention
     {
         public IList<string> GetInstalledPclDrivers()
         {
+            return GetInstalledPclDrivers(null);
+        }
+
+        public IList<string> GetInstalledPclDrivers(string preferredModel)
+        {
             var drivers = new List<string>();
 
             using (var searcher = new ManagementObjectSearcher("SELECT Name FROM Win32_PrinterDriver"))
@@ -26,7 +31,7 @@ namespace Printervention
                 foreach (ManagementObject driver in searcher.Get())
                 {
                     var name = Convert.ToString(driver["Name"]);
-                    if (DriverCatalog.IsAllowedDriverName(name))
+                    if (DriverCatalog.IsAllowedDriverName(name, preferredModel))
                     {
                         drivers.Add(name);
                     }
@@ -93,9 +98,9 @@ namespace Printervention
                 throw new ArgumentException("Enter a printer name.", "printerName");
             }
 
-            if (!DriverCatalog.IsAllowedDriverName(driverName))
+            if (!DriverCatalog.IsAllowedDriverName(driverName, printerName))
             {
-                throw new InvalidOperationException("Choose an installed model-specific PCL/PCL6 driver that is not universal and not v4. If the dropdown is empty, use Install Driver first.");
+                throw new InvalidOperationException("Choose an installed model-specific PCL/PCL6 driver that is not universal and not v4. If the dropdown is empty, use Install Driver and Print Object first.");
             }
 
             var portName = "IP_" + parsedIp;

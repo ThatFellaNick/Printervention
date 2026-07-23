@@ -13,8 +13,7 @@ The first version targets .NET Framework 4.8 so it can run on commonly managed W
 - Shows an authorized vendor domain allowlist for driver downloads.
 - Creates a Standard TCP/IP printer port.
 - Can create a printer queue with a selected installed driver.
-- Has an `Install Driver` flow that tries automatic official download, extraction, and driver staging before asking for a folder.
-- `Install Printer` attempts driver install first when no usable driver is selected.
+- Has an `Install Driver and Print Object` flow that tries automatic official download, extraction, driver staging, and Windows queue creation.
 - Driver staging tolerates partial package failures when at least one printer INF is added successfully.
 - Includes a Test Plan button for no-printer validation.
 - Attempts to default the queue to black-and-white and one-sided printing.
@@ -54,11 +53,11 @@ Hardware is still needed later to verify live SNMP/HTTP discovery, actual driver
 
 1. Enter the printer IP and click `Find Printer`.
 2. Confirm or correct the brand and model.
-3. Click `Open Model Driver Page` or `Install Driver`. Printervention copies the model/search text to the clipboard first.
-4. Let `Install Driver` try to download, extract, and stage the model-specific PCL/PCL6 package automatically.
+3. Click `Install Driver and Print Object`.
+4. Printervention tries to download, extract, stage the model-specific PCL/PCL6 package, and create the Windows print object automatically.
 5. If automatic install cannot finish, use the opened vendor page to download the package and extract it.
 6. When prompted, choose the extracted folder that contains `.inf` files.
-7. Pick the newly installed model-specific non-v4 PCL driver from `Installed Driver`, or click `Install Printer` and let Printervention try the driver-install step first.
-8. Click `Install Printer`.
+7. If automatic matching cannot identify the installed driver name, pick the newly installed model-specific non-v4 PCL driver from `Installed Driver`.
+8. Click `Install Driver and Print Object` again.
 
-If `Installed Driver` is empty, Windows does not have a matching model-specific PCL driver staged yet. Creating the queue requires a real installed driver name, not just the recommendation text shown in the test plan.
+If `Installed Driver` is empty, Windows does not have a matching model-specific PCL driver staged yet. Creating the print object requires a real installed driver name, not just the recommendation text shown in the test plan.
