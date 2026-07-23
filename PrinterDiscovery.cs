@@ -213,6 +213,8 @@ namespace Printervention
             }
 
             var cleaned = Regex.Replace(text, @"\s+", " ").Trim();
+            cleaned = Regex.Replace(cleaned, @"\s*/\s*.*$", string.Empty).Trim();
+            cleaned = Regex.Replace(cleaned, @"\b\d+(\.\d+)+\b$", string.Empty).Trim();
             cleaned = Regex.Replace(cleaned, @"\b(Web|Printer|Print Server|Embedded Web Server)\b", string.Empty, RegexOptions.IgnoreCase).Trim();
             return cleaned;
         }

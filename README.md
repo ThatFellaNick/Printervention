@@ -7,6 +7,7 @@ The first version targets .NET Framework 4.8 so it can run on commonly managed W
 ## Current behavior
 
 - Discovers printer identity by SNMP first, then HTTP as a fallback.
+- Updates app-suggested queue names when a new printer is discovered.
 - Supports the requested major printer brands with a driver catalog.
 - Blocks PCL v4, class-driver, universal, global, and generic driver recommendations.
 - Shows an authorized vendor domain allowlist for driver downloads.

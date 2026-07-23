@@ -32,6 +32,8 @@ namespace Printervention
         private Button _testPlanButton;
         private Button _createQueueButton;
         private DriverRecommendation _currentRecommendation;
+        private bool _settingSuggestedQueueName;
+        private string _lastSuggestedQueueName;
 
         public MainForm()
         {
@@ -96,6 +98,13 @@ namespace Printervention
             inputGrid.Controls.Add(_vendorComboBox, 3, 1);
 
             _printerNameTextBox = AddLabeledTextBox(inputGrid, "Queue Name", 0, 2);
+            _printerNameTextBox.TextChanged += (sender, args) =>
+            {
+                if (!_settingSuggestedQueueName)
+                {
+                    _lastSuggestedQueueName = null;
+                }
+            };
 
             _installedDriverComboBox = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill, Margin = new Padding(0, 2, 8, 8) };
             inputGrid.Controls.Add(new Label { Text = "Installed Driver", AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(0, 6, 8, 8) }, 2, 2);
@@ -167,10 +176,7 @@ namespace Printervention
             {
                 var identity = await _discovery.DiscoverAsync(_ipAddressTextBox.Text);
                 _modelTextBox.Text = identity.Model;
-                if (string.IsNullOrWhiteSpace(_printerNameTextBox.Text) && !string.IsNullOrWhiteSpace(identity.Model))
-                {
-                    _printerNameTextBox.Text = identity.Model;
-                }
+                UpdateSuggestedQueueName(identity.Model);
 
                 var matchedVendor = _catalog.MatchVendor(identity.RawDescription + " " + identity.Model);
                 if (matchedVendor != null)
@@ -189,6 +195,44 @@ namespace Printervention
             {
                 SetBusy(false, null);
             }
+        }
+
+        private void UpdateSuggestedQueueName(string model)
+        {
+            if (string.IsNullOrWhiteSpace(model))
+            {
+                return;
+            }
+
+            var suggestedName = BuildQueueName(model);
+            if (!ShouldReplaceQueueName())
+            {
+                return;
+            }
+
+            _settingSuggestedQueueName = true;
+            try
+            {
+                _printerNameTextBox.Text = suggestedName;
+                _lastSuggestedQueueName = suggestedName;
+            }
+            finally
+            {
+                _settingSuggestedQueueName = false;
+            }
+        }
+
+        private bool ShouldReplaceQueueName()
+        {
+            return string.IsNullOrWhiteSpace(_printerNameTextBox.Text) ||
+                string.Equals(_printerNameTextBox.Text, _lastSuggestedQueueName, StringComparison.Ordinal);
+        }
+
+        private static string BuildQueueName(string model)
+        {
+            var invalidChars = System.IO.Path.GetInvalidFileNameChars();
+            var cleaned = new string(model.Where(character => !invalidChars.Contains(character)).ToArray()).Trim();
+            return cleaned.Length > 80 ? cleaned.Substring(0, 80).Trim() : cleaned;
         }
 
         private void RefreshInstalledDrivers()
