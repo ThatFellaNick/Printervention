@@ -31,9 +31,10 @@ namespace Printervention
                 foreach (ManagementObject driver in searcher.Get())
                 {
                     var name = Convert.ToString(driver["Name"]);
-                    if (DriverCatalog.IsAllowedDriverName(name, preferredModel))
+                    var cleanName = NormalizeDriverName(name);
+                    if (DriverCatalog.IsAllowedDriverName(cleanName, preferredModel))
                     {
-                        drivers.Add(name);
+                        drivers.Add(cleanName);
                     }
                 }
             }
@@ -104,7 +105,8 @@ namespace Printervention
                 throw new ArgumentException("Enter a printer name.", "printerName");
             }
 
-            if (!DriverCatalog.IsAllowedDriverName(driverName, printerName))
+            var normalizedDriverName = NormalizeDriverName(driverName);
+            if (!DriverCatalog.IsAllowedDriverName(normalizedDriverName, printerName))
             {
                 throw new InvalidOperationException("Choose an installed model-specific PCL/PCL6 driver that is not universal and not v4. If the dropdown is empty, use Install Driver and Print Object first.");
             }
@@ -113,7 +115,7 @@ namespace Printervention
             EnsureTcpIpPort(portName, parsedIp.ToString());
             EnsurePrinterDoesNotExist(printerName.Trim());
 
-            RunPowerShell("Add-Printer -Name " + PsQuote(printerName.Trim()) + " -DriverName " + PsQuote(driverName.Trim()) + " -PortName " + PsQuote(portName), true);
+            RunPowerShell("Add-Printer -Name " + PsQuote(printerName.Trim()) + " -DriverName " + PsQuote(normalizedDriverName) + " -PortName " + PsQuote(portName), true);
             ApplyPrinterDefaults(printerName.Trim());
         }
 
@@ -252,6 +254,17 @@ namespace Printervention
             }
 
             return true;
+        }
+
+        private static string NormalizeDriverName(string driverName)
+        {
+            if (string.IsNullOrWhiteSpace(driverName))
+            {
+                return string.Empty;
+            }
+
+            var marker = driverName.IndexOf(",3,", StringComparison.OrdinalIgnoreCase);
+            return marker > 0 ? driverName.Substring(0, marker).Trim() : driverName.Trim();
         }
 
         private static bool IsSuccessfulPnPOutput(string output)

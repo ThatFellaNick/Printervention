@@ -251,7 +251,7 @@ namespace Printervention
 
                 if (_installedDriverComboBox.Items.Count > 0)
                 {
-                    SelectPreferredDriver(preferredModel);
+                    SelectPreferredDriver(preferredModel, Convert.ToString(_vendorComboBox.SelectedItem));
                     SetStatus("Found " + _installedDriverComboBox.Items.Count + " installed model-specific non-v4 PCL driver(s).");
                 }
                 else
@@ -265,24 +265,59 @@ namespace Printervention
             }
         }
 
-        private void SelectPreferredDriver(string preferredModel)
+        private void SelectPreferredDriver(string preferredModel, string preferredVendor)
         {
             var preferredTerms = (preferredModel ?? string.Empty)
                 .Split(new[] { ' ', '-', '_' }, StringSplitOptions.RemoveEmptyEntries)
                 .Where(term => term.Any(char.IsDigit))
                 .ToArray();
 
+            var bestIndex = 0;
+            var bestScore = int.MinValue;
             for (var index = 0; index < _installedDriverComboBox.Items.Count; index++)
             {
                 var driverName = Convert.ToString(_installedDriverComboBox.Items[index]);
-                if (preferredTerms.Any(term => driverName.IndexOf(term, StringComparison.OrdinalIgnoreCase) >= 0))
+                var score = ScoreInstalledDriver(driverName, preferredTerms, preferredVendor);
+                if (score > bestScore)
                 {
-                    _installedDriverComboBox.SelectedIndex = index;
-                    return;
+                    bestScore = score;
+                    bestIndex = index;
                 }
             }
 
-            _installedDriverComboBox.SelectedIndex = 0;
+            _installedDriverComboBox.SelectedIndex = bestIndex;
+        }
+
+        private static int ScoreInstalledDriver(string driverName, string[] preferredTerms, string preferredVendor)
+        {
+            var score = 0;
+            foreach (var term in preferredTerms)
+            {
+                if (driverName.IndexOf(term, StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    score += 20;
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(preferredVendor) &&
+                driverName.IndexOf(preferredVendor, StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                score += 50;
+            }
+
+            if (driverName.IndexOf("PCL", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                score += 10;
+            }
+
+            if (driverName.IndexOf("Gestetner", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                driverName.IndexOf("Lanier", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                driverName.IndexOf("Savin", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                score -= 15;
+            }
+
+            return score;
         }
 
         private void UpdateRecommendation()
