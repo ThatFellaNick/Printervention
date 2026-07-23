@@ -239,6 +239,11 @@ namespace Printervention
 
         private void RefreshInstalledDrivers()
         {
+            RefreshInstalledDrivers(null);
+        }
+
+        private void RefreshInstalledDrivers(string preferredModel)
+        {
             try
             {
                 var drivers = _installer.GetInstalledPclDrivers();
@@ -250,7 +255,7 @@ namespace Printervention
 
                 if (_installedDriverComboBox.Items.Count > 0)
                 {
-                    _installedDriverComboBox.SelectedIndex = 0;
+                    SelectPreferredDriver(preferredModel);
                     SetStatus("Found " + _installedDriverComboBox.Items.Count + " installed model-specific non-v4 PCL driver(s).");
                 }
                 else
@@ -262,6 +267,26 @@ namespace Printervention
             {
                 SetStatus(ex.Message);
             }
+        }
+
+        private void SelectPreferredDriver(string preferredModel)
+        {
+            var preferredTerms = (preferredModel ?? string.Empty)
+                .Split(new[] { ' ', '-', '_' }, StringSplitOptions.RemoveEmptyEntries)
+                .Where(term => term.Any(char.IsDigit))
+                .ToArray();
+
+            for (var index = 0; index < _installedDriverComboBox.Items.Count; index++)
+            {
+                var driverName = Convert.ToString(_installedDriverComboBox.Items[index]);
+                if (preferredTerms.Any(term => driverName.IndexOf(term, StringComparison.OrdinalIgnoreCase) >= 0))
+                {
+                    _installedDriverComboBox.SelectedIndex = index;
+                    return;
+                }
+            }
+
+            _installedDriverComboBox.SelectedIndex = 0;
         }
 
         private void UpdateRecommendation()
@@ -311,7 +336,7 @@ namespace Printervention
             try
             {
                 var result = _downloadService.InstallFromRecommendation(_currentRecommendation);
-                RefreshInstalledDrivers();
+                RefreshInstalledDrivers(_modelTextBox.Text);
                 SetStatus("Driver installed automatically. Pick the driver, then install the printer.");
                 MessageBox.Show(this, BuildInstallResultMessage(result), "Driver installed", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return _installedDriverComboBox.Items.Count > 0;
@@ -375,7 +400,7 @@ namespace Printervention
                 try
                 {
                     var result = _installer.StageDriverFolder(dialog.SelectedPath);
-                    RefreshInstalledDrivers();
+                    RefreshInstalledDrivers(_modelTextBox.Text);
                     SetStatus("Driver installed. Pick the model-specific non-v4 PCL driver, then install the printer.");
                     MessageBox.Show(this, string.IsNullOrWhiteSpace(result) ? "Driver installed." : result, "Driver install finished", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     return _installedDriverComboBox.Items.Count > 0;

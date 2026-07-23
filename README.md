@@ -15,6 +15,7 @@ The first version targets .NET Framework 4.8 so it can run on commonly managed W
 - Can create a printer queue with a selected installed driver.
 - Has an `Install Driver` flow that tries automatic official download, extraction, and driver staging before asking for a folder.
 - `Install Printer` attempts driver install first when no usable driver is selected.
+- Driver staging tolerates partial package failures when at least one printer INF is added successfully.
 - Includes a Test Plan button for no-printer validation.
 - Attempts to default the queue to black-and-white and one-sided printing.
 

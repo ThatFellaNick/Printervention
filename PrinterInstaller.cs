@@ -43,13 +43,36 @@ namespace Printervention
                 throw new ArgumentException("Choose a folder that contains the extracted driver files.", "folderPath");
             }
 
-            if (!Directory.EnumerateFiles(folderPath, "*.inf", SearchOption.AllDirectories).Any())
+            var infFiles = Directory.EnumerateFiles(folderPath, "*.inf", SearchOption.AllDirectories)
+                .Where(IsLikelyPrinterDriverInf)
+                .OrderBy(path => path)
+                .ToList();
+
+            if (!infFiles.Any())
             {
                 throw new InvalidOperationException("No INF driver files were found in that folder. Extract the vendor driver package first, then choose the extracted folder.");
             }
 
-            // pnputil stages matching INF packages from the selected folder into the Windows driver store.
-            return RunProcessWithOutput("pnputil.exe", "/add-driver " + Quote(Path.Combine(folderPath, "*.inf")) + " /subdirs /install", true);
+            var result = new DriverStagingSummary();
+            foreach (var infFile in infFiles)
+            {
+                var output = RunProcessWithOutput("pnputil.exe", "/add-driver " + Quote(infFile) + " /install", false);
+                if (IsSuccessfulPnPOutput(output))
+                {
+                    result.AddSuccess(infFile, output);
+                }
+                else
+                {
+                    result.AddFailure(infFile, output);
+                }
+            }
+
+            if (result.SuccessCount == 0)
+            {
+                throw new InvalidOperationException(result.BuildMessage());
+            }
+
+            return result.BuildMessage();
         }
 
         public void CreateQueue(string ipAddress, string printerName, string driverName)
@@ -207,12 +230,94 @@ namespace Printervention
             return value.Replace("\\", "\\\\").Replace("'", "\\'");
         }
 
+        private static bool IsLikelyPrinterDriverInf(string path)
+        {
+            var fileName = Path.GetFileName(path);
+            if (fileName.Equals("oemsetup.inf", StringComparison.OrdinalIgnoreCase) ||
+                fileName.Equals("setup.inf", StringComparison.OrdinalIgnoreCase) ||
+                fileName.IndexOf("uninstall", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        private static bool IsSuccessfulPnPOutput(string output)
+        {
+            if (string.IsNullOrWhiteSpace(output))
+            {
+                return false;
+            }
+
+            return output.IndexOf("Driver package added successfully", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                output.IndexOf("Driver package installed", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                output.IndexOf("Published Name", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
         private static void AppendLine(StringBuilder builder, string value)
         {
             if (!string.IsNullOrWhiteSpace(value))
             {
                 builder.AppendLine(value);
             }
+        }
+    }
+
+    internal sealed class DriverStagingSummary
+    {
+        private readonly List<string> _successes = new List<string>();
+        private readonly List<string> _failures = new List<string>();
+
+        public int SuccessCount
+        {
+            get { return _successes.Count; }
+        }
+
+        public int FailureCount
+        {
+            get { return _failures.Count; }
+        }
+
+        public void AddSuccess(string infFile, string output)
+        {
+            _successes.Add(Path.GetFileName(infFile) + Environment.NewLine + TrimOutput(output));
+        }
+
+        public void AddFailure(string infFile, string output)
+        {
+            _failures.Add(Path.GetFileName(infFile) + Environment.NewLine + TrimOutput(output));
+        }
+
+        public string BuildMessage()
+        {
+            var builder = new StringBuilder();
+            builder.AppendLine("Driver staging finished.");
+            builder.AppendLine("Succeeded: " + SuccessCount);
+            builder.AppendLine("Failed or skipped: " + FailureCount);
+
+            if (_failures.Count > 0)
+            {
+                builder.AppendLine();
+                builder.AppendLine("Failed items:");
+                foreach (var failure in _failures.Take(5))
+                {
+                    builder.AppendLine(failure);
+                    builder.AppendLine();
+                }
+            }
+
+            return builder.ToString().Trim();
+        }
+
+        private static string TrimOutput(string output)
+        {
+            if (string.IsNullOrWhiteSpace(output))
+            {
+                return "No output was returned.";
+            }
+
+            return output.Length > 800 ? output.Substring(0, 800).Trim() + "..." : output.Trim();
         }
     }
 }
