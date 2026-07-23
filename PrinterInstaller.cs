@@ -72,7 +72,7 @@ namespace Printervention
 
             if (!DriverCatalog.IsAllowedDriverName(driverName))
             {
-                throw new InvalidOperationException("Choose an installed model-specific PCL/PCL6 driver that is not universal and not v4. If the dropdown is empty, download and extract the vendor package, then use Stage Driver Folder.");
+                throw new InvalidOperationException("Choose an installed model-specific PCL/PCL6 driver that is not universal and not v4. If the dropdown is empty, use Install Driver first.");
             }
 
             var portName = "IP_" + parsedIp;
