@@ -148,20 +148,39 @@ namespace Printervention
 
         private static void ApplyPrinterDefaults(string printerName)
         {
-            // Win32_Printer exposes the common defaults most admins expect to set after queue creation.
-            using (var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_Printer WHERE Name='" + EscapeWql(printerName) + "'"))
-            {
-                foreach (ManagementObject printer in searcher.Get())
-                {
-                    printer["Default"] = false;
-                    printer["Duplex"] = false;
-                    printer["EnableBIDI"] = true;
-                    printer.Put();
-                }
-            }
-
+            TryApplyWmiPrinterDefaults(printerName);
             TrySetPrinterSettings(printerName);
             RunPowerShell("Set-PrintConfiguration -PrinterName " + PsQuote(printerName) + " -Color $false -DuplexingMode OneSided", false);
+            RunPowerShell("Get-Printer -Name " + PsQuote(printerName) + " | Set-Printer -EnableBidi $true", false);
+        }
+
+        private static void TryApplyWmiPrinterDefaults(string printerName)
+        {
+            try
+            {
+                // Win32_Printer exposes common queue defaults, but some vendor drivers throw after creation.
+                using (var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_Printer WHERE Name='" + EscapeWql(printerName) + "'"))
+                {
+                    foreach (ManagementObject printer in searcher.Get())
+                    {
+                        try
+                        {
+                            printer["Default"] = false;
+                            printer["Duplex"] = false;
+                            printer["EnableBIDI"] = true;
+                            printer.Put();
+                        }
+                        catch
+                        {
+                            // Driver-specific WMI failures should not block PrintConfiguration defaults.
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                // The PowerShell print module still gets a chance to apply B&W and simplex defaults.
+            }
         }
 
         private static void TrySetPrinterSettings(string printerName)
@@ -214,6 +233,11 @@ namespace Printervention
                 }
                 catch (Exception ex)
                 {
+                    if (PrinterExists(printerName))
+                    {
+                        return;
+                    }
+
                     if (firstError == null)
                     {
                         firstError = ex;
