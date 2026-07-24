@@ -93,6 +93,13 @@ namespace Printervention
                 .Any(alias => driverName.IndexOf(alias, StringComparison.OrdinalIgnoreCase) >= 0);
         }
 
+        public static bool IsExactVendorMatch(string preferredVendor, string driverName)
+        {
+            return !string.IsNullOrWhiteSpace(preferredVendor) &&
+                !string.IsNullOrWhiteSpace(driverName) &&
+                driverName.IndexOf(preferredVendor, StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
         public static string[] GetVendorFamilyAliases(string vendor)
         {
             if (IsRicohFamilyName(vendor))

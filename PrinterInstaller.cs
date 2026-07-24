@@ -49,6 +49,11 @@ namespace Printervention
 
         public string StageDriverFolder(string folderPath, string preferredModel)
         {
+            return StageDriverFolder(folderPath, preferredModel, null);
+        }
+
+        public string StageDriverFolder(string folderPath, string preferredModel, string preferredVendor)
+        {
             if (string.IsNullOrWhiteSpace(folderPath) || !Directory.Exists(folderPath))
             {
                 throw new ArgumentException("Choose a folder that contains the extracted driver files.", "folderPath");
@@ -71,7 +76,7 @@ namespace Printervention
                 if (IsSuccessfulPnPOutput(output))
                 {
                     result.AddSuccess(infFile, output);
-                    RegisterMatchingPrintDrivers(infFile, preferredModel, result);
+                    RegisterMatchingPrintDrivers(infFile, preferredModel, preferredVendor, result);
                 }
                 else
                 {
@@ -447,11 +452,11 @@ namespace Printervention
                 .Where(line => !string.IsNullOrWhiteSpace(line));
         }
 
-        private static void RegisterMatchingPrintDrivers(string infFile, string preferredModel, DriverStagingSummary result)
+        private static void RegisterMatchingPrintDrivers(string infFile, string preferredModel, string preferredVendor, DriverStagingSummary result)
         {
             var names = GetDriverNamesFromInf(infFile)
                 .Where(name => DriverCatalog.IsAllowedDriverName(name, preferredModel))
-                .OrderByDescending(name => ScoreDriverName(name, preferredModel))
+                .OrderByDescending(name => ScoreDriverName(name, preferredModel, preferredVendor))
                 .ToList();
 
             foreach (var name in names.Take(3))
@@ -489,7 +494,7 @@ namespace Printervention
             }
         }
 
-        private static int ScoreDriverName(string driverName, string preferredModel)
+        private static int ScoreDriverName(string driverName, string preferredModel, string preferredVendor)
         {
             var score = 0;
             var lowered = driverName.ToLowerInvariant();
@@ -507,6 +512,17 @@ namespace Printervention
                         score += 20;
                     }
                 }
+            }
+
+            if (DriverCatalog.IsExactVendorMatch(preferredVendor, driverName))
+            {
+                score += 80;
+            }
+            else if (DriverCatalog.IsVendorFamilyMatch(preferredVendor, driverName))
+            {
+                // Ricoh-family packages may contain Savin, Lanier, or Gestetner siblings. Keep them
+                // viable, but prefer the selected/discovered brand when that exact name is present.
+                score += 35;
             }
 
             return score;

@@ -299,10 +299,13 @@ namespace Printervention
                 }
             }
 
-            if (!string.IsNullOrWhiteSpace(preferredVendor) &&
-                DriverCatalog.IsVendorFamilyMatch(preferredVendor, driverName))
+            if (DriverCatalog.IsExactVendorMatch(preferredVendor, driverName))
             {
-                score += 50;
+                score += 80;
+            }
+            else if (DriverCatalog.IsVendorFamilyMatch(preferredVendor, driverName))
+            {
+                score += 35;
             }
 
             if (driverName.IndexOf("PCL", StringComparison.OrdinalIgnoreCase) >= 0)
@@ -406,7 +409,7 @@ namespace Printervention
                 SetBusy(true, "Staging driver files...");
                 try
                 {
-                    var result = _installer.StageDriverFolder(dialog.SelectedPath, _modelTextBox.Text);
+                    var result = _installer.StageDriverFolder(dialog.SelectedPath, _modelTextBox.Text, _currentRecommendation.Vendor);
                     RefreshInstalledDrivers(_modelTextBox.Text);
                     SetStatus("Driver installed.");
                     MessageBox.Show(this, string.IsNullOrWhiteSpace(result) ? "Driver installed." : result, "Driver install finished", MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -444,6 +447,13 @@ namespace Printervention
                 }
 
                 RefreshInstalledDrivers(_modelTextBox.Text);
+                if (ShouldTryExactVendorDriver())
+                {
+                    SetStatus("Trying to register the exact " + _currentRecommendation.Vendor + " driver name before creating the queue...");
+                    InstallDriverWorkflow(false);
+                    RefreshInstalledDrivers(_modelTextBox.Text);
+                }
+
                 if (_installedDriverComboBox.SelectedItem == null)
                 {
                     SetStatus("Install stopped before a model-specific driver was selected.");
@@ -461,6 +471,18 @@ namespace Printervention
                 SetStatus(ex.Message);
                 MessageBox.Show(this, ex.Message, "Install failed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
+        }
+
+        private bool ShouldTryExactVendorDriver()
+        {
+            if (_currentRecommendation == null || !_currentRecommendation.IsKnownVendor || _installedDriverComboBox.SelectedItem == null)
+            {
+                return false;
+            }
+
+            var selectedDriver = Convert.ToString(_installedDriverComboBox.SelectedItem);
+            return DriverCatalog.IsVendorFamilyMatch(_currentRecommendation.Vendor, selectedDriver) &&
+                !DriverCatalog.IsExactVendorMatch(_currentRecommendation.Vendor, selectedDriver);
         }
 
         private void TestPlan()
