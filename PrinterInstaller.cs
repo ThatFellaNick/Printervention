@@ -454,20 +454,32 @@ namespace Printervention
 
         private static void RegisterMatchingPrintDrivers(string infFile, string preferredModel, string preferredVendor, DriverStagingSummary result)
         {
+            var registeredCount = 0;
             var names = GetDriverNamesFromInf(infFile)
                 .Where(name => DriverCatalog.IsAllowedDriverName(name, preferredModel))
                 .OrderByDescending(name => ScoreDriverName(name, preferredModel, preferredVendor))
                 .ToList();
 
-            foreach (var name in names.Take(3))
+            foreach (var name in names.Take(12))
             {
                 var output = TryRegisterPrintDriver(infFile, name);
                 if (IsPrintDriverRegistrationSuccess(output))
                 {
                     result.AddRegistration(name, output);
-                    return;
+                    registeredCount++;
+                    if (registeredCount >= 4 && HasExactVendorRegistration(registeredCount, preferredVendor, result))
+                    {
+                        return;
+                    }
                 }
             }
+        }
+
+        private static bool HasExactVendorRegistration(int registeredCount, string preferredVendor, DriverStagingSummary result)
+        {
+            return registeredCount > 0 &&
+                !string.IsNullOrWhiteSpace(preferredVendor) &&
+                result.RegisteredDriverNames.Any(name => DriverCatalog.IsExactVendorMatch(preferredVendor, name));
         }
 
         private static IEnumerable<string> GetDriverNamesFromInf(string infFile)
@@ -578,6 +590,15 @@ namespace Printervention
         public int RegistrationCount
         {
             get { return _registrations.Count; }
+        }
+
+        public IEnumerable<string> RegisteredDriverNames
+        {
+            get
+            {
+                return _registrations.Select(registration =>
+                    registration.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None).FirstOrDefault() ?? string.Empty);
+            }
         }
 
         public void AddSuccess(string infFile, string output)
