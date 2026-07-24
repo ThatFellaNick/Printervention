@@ -182,6 +182,7 @@ namespace Printervention
                     _vendorComboBox.SelectedItem = matchedVendor.DisplayName;
                 }
 
+                RefreshInstalledDrivers(identity.Model);
                 SetStatus("Discovery finished using " + identity.Source + ".");
             }
             catch (Exception ex)
@@ -235,7 +236,7 @@ namespace Printervention
 
         private void RefreshInstalledDrivers()
         {
-            RefreshInstalledDrivers(null);
+            RefreshInstalledDrivers(_modelTextBox.Text);
         }
 
         private void RefreshInstalledDrivers(string preferredModel)
@@ -256,7 +257,10 @@ namespace Printervention
                 }
                 else
                 {
-                    SetStatus("No installed model-specific non-v4 PCL drivers were found. Open the official driver page and install or stage one first.");
+                    var modelContext = DriverCatalog.HasPreferredModelTerms(preferredModel)
+                        ? " matching " + preferredModel.Trim()
+                        : string.Empty;
+                    SetStatus("No installed model-specific non-v4 PCL drivers" + modelContext + " were found. Use Install Driver and Print Object first.");
                 }
             }
             catch (Exception ex)
@@ -462,7 +466,7 @@ namespace Printervention
                 }
 
                 var driverName = Convert.ToString(_installedDriverComboBox.SelectedItem);
-                _installer.CreateQueue(_ipAddressTextBox.Text, _printerNameTextBox.Text, driverName);
+                _installer.CreateQueue(_ipAddressTextBox.Text, _printerNameTextBox.Text, driverName, _modelTextBox.Text);
                 SetStatus("Driver and print object installed.");
                 MessageBox.Show(this, "Driver and print object installed. Defaults were set to black-and-white and one-sided where Windows allowed it.", "Install complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
@@ -519,7 +523,8 @@ namespace Printervention
                 throw new InvalidOperationException("Enter a queue name for the test plan.");
             }
 
-            if (!DriverCatalog.IsAllowedDriverName(driverName, _modelTextBox.Text))
+            var usingRecommendationPlaceholder = string.Equals(driverName, _currentRecommendation.RecommendedDriver, StringComparison.OrdinalIgnoreCase);
+            if (!DriverCatalog.IsAllowedDriverName(driverName, usingRecommendationPlaceholder ? null : _modelTextBox.Text))
             {
                 throw new InvalidOperationException("The selected or recommended driver is not a model-specific non-v4 PCL/PCL6 driver.");
             }

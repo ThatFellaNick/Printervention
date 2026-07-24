@@ -79,7 +79,12 @@ namespace Printervention
                 return false;
             }
 
-            return name.Contains("pcl") || LooksLikeModelSpecificDriver(driverName, preferredModel);
+            if (!name.Contains("pcl"))
+            {
+                return false;
+            }
+
+            return !HasPreferredModelTerms(preferredModel) || LooksLikeModelSpecificDriver(driverName, preferredModel);
         }
 
         public static bool IsVendorFamilyMatch(string preferredVendor, string driverName)
@@ -98,6 +103,11 @@ namespace Printervention
             return !string.IsNullOrWhiteSpace(preferredVendor) &&
                 !string.IsNullOrWhiteSpace(driverName) &&
                 driverName.IndexOf(preferredVendor, StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        public static bool HasPreferredModelTerms(string preferredModel)
+        {
+            return ExtractPreferredModelTerms(preferredModel).Any();
         }
 
         public static string[] GetVendorFamilyAliases(string vendor)
@@ -135,13 +145,24 @@ namespace Printervention
             }
 
             var driver = driverName.ToLowerInvariant();
-            var modelTerms = preferredModel
-                .Split(new[] { ' ', '-', '_', '/', '\\' }, StringSplitOptions.RemoveEmptyEntries)
-                .Where(term => term.Any(char.IsDigit) && term.Length >= 3)
+            var modelTerms = ExtractPreferredModelTerms(preferredModel)
                 .Select(term => term.ToLowerInvariant())
                 .ToArray();
 
             return modelTerms.Any(term => driver.Contains(term));
+        }
+
+        private static IEnumerable<string> ExtractPreferredModelTerms(string preferredModel)
+        {
+            if (string.IsNullOrWhiteSpace(preferredModel))
+            {
+                return new string[0];
+            }
+
+            return preferredModel
+                .Split(new[] { ' ', '-', '_', '/', '\\' }, StringSplitOptions.RemoveEmptyEntries)
+                .Where(term => term.Any(char.IsDigit) && term.Length >= 3)
+                .ToArray();
         }
 
         private static List<VendorDriverProfile> BuildProfiles()

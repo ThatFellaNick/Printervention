@@ -94,6 +94,11 @@ namespace Printervention
 
         public void CreateQueue(string ipAddress, string printerName, string driverName)
         {
+            CreateQueue(ipAddress, printerName, driverName, printerName);
+        }
+
+        public void CreateQueue(string ipAddress, string printerName, string driverName, string preferredModel)
+        {
             if (string.IsNullOrWhiteSpace(ipAddress))
             {
                 throw new ArgumentException("Enter a printer IP address first.", "ipAddress");
@@ -111,7 +116,7 @@ namespace Printervention
             }
 
             var normalizedDriverName = NormalizeDriverName(driverName);
-            if (!DriverCatalog.IsAllowedDriverName(normalizedDriverName, printerName))
+            if (!DriverCatalog.IsAllowedDriverName(normalizedDriverName, preferredModel))
             {
                 throw new InvalidOperationException("Choose an installed model-specific PCL/PCL6 driver that is not universal and not v4. If the dropdown is empty, use Install Driver and Print Object first.");
             }
