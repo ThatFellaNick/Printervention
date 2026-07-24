@@ -24,6 +24,11 @@ namespace Printervention
 
         public IList<string> GetInstalledPclDrivers(string preferredModel)
         {
+            return GetInstalledPclDrivers(preferredModel, null);
+        }
+
+        public IList<string> GetInstalledPclDrivers(string preferredModel, string preferredVendor)
+        {
             var drivers = new List<string>();
 
             using (var searcher = new ManagementObjectSearcher("SELECT Name FROM Win32_PrinterDriver"))
@@ -32,7 +37,7 @@ namespace Printervention
                 {
                     var name = Convert.ToString(driver["Name"]);
                     var cleanName = NormalizeDriverName(name);
-                    if (DriverCatalog.IsAllowedDriverName(cleanName, preferredModel))
+                    if (DriverCatalog.IsCompatibleDriverName(cleanName, preferredModel, preferredVendor))
                     {
                         drivers.Add(cleanName);
                     }
@@ -99,6 +104,11 @@ namespace Printervention
 
         public void CreateQueue(string ipAddress, string printerName, string driverName, string preferredModel)
         {
+            CreateQueue(ipAddress, printerName, driverName, preferredModel, null);
+        }
+
+        public void CreateQueue(string ipAddress, string printerName, string driverName, string preferredModel, string preferredVendor)
+        {
             if (string.IsNullOrWhiteSpace(ipAddress))
             {
                 throw new ArgumentException("Enter a printer IP address first.", "ipAddress");
@@ -116,9 +126,9 @@ namespace Printervention
             }
 
             var normalizedDriverName = NormalizeDriverName(driverName);
-            if (!DriverCatalog.IsAllowedDriverName(normalizedDriverName, preferredModel))
+            if (!DriverCatalog.IsCompatibleDriverName(normalizedDriverName, preferredModel, preferredVendor))
             {
-                throw new InvalidOperationException("Choose an installed model-specific PCL/PCL6 driver that is not universal and not v4. If the dropdown is empty, use Install Driver and Print Object first.");
+                throw new InvalidOperationException("Choose an installed model-specific PCL/PCL6 driver for this printer brand and model that is not universal and not v4. If the dropdown is empty, use Install Driver and Print Object first.");
             }
 
             var portName = "IP_" + parsedIp;
@@ -461,7 +471,7 @@ namespace Printervention
         {
             var registeredCount = 0;
             var names = GetDriverNamesFromInf(infFile)
-                .Where(name => DriverCatalog.IsAllowedDriverName(name, preferredModel))
+                .Where(name => DriverCatalog.IsCompatibleDriverName(name, preferredModel, preferredVendor))
                 .OrderByDescending(name => ScoreDriverName(name, preferredModel, preferredVendor))
                 .ToList();
 

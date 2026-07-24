@@ -91,10 +91,18 @@ namespace Printervention
             inputGrid.Controls.Add(_discoverButton, 3, 0);
 
             _modelTextBox = AddLabeledTextBox(inputGrid, "Model", 0, 1);
-            _modelTextBox.TextChanged += (sender, args) => UpdateRecommendation();
+            _modelTextBox.TextChanged += (sender, args) =>
+            {
+                UpdateRecommendation();
+                ClearIncompatibleInstalledDriverSelection();
+            };
 
             _vendorComboBox = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill, Margin = new Padding(0, 2, 8, 8) };
-            _vendorComboBox.SelectedIndexChanged += (sender, args) => UpdateRecommendation();
+            _vendorComboBox.SelectedIndexChanged += (sender, args) =>
+            {
+                UpdateRecommendation();
+                ClearIncompatibleInstalledDriverSelection();
+            };
             inputGrid.Controls.Add(new Label { Text = "Brand", AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(0, 6, 8, 8) }, 2, 1);
             inputGrid.Controls.Add(_vendorComboBox, 3, 1);
 
@@ -243,7 +251,7 @@ namespace Printervention
         {
             try
             {
-                var drivers = _installer.GetInstalledPclDrivers(preferredModel);
+                var drivers = _installer.GetInstalledPclDrivers(preferredModel, GetPreferredVendor());
                 _installedDriverComboBox.Items.Clear();
                 foreach (var driver in drivers)
                 {
@@ -466,7 +474,7 @@ namespace Printervention
                 }
 
                 var driverName = Convert.ToString(_installedDriverComboBox.SelectedItem);
-                _installer.CreateQueue(_ipAddressTextBox.Text, _printerNameTextBox.Text, driverName, _modelTextBox.Text);
+                _installer.CreateQueue(_ipAddressTextBox.Text, _printerNameTextBox.Text, driverName, _modelTextBox.Text, GetPreferredVendor());
                 SetStatus("Driver and print object installed.");
                 MessageBox.Show(this, "Driver and print object installed. Defaults were set to black-and-white and one-sided where Windows allowed it.", "Install complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
@@ -487,6 +495,26 @@ namespace Printervention
             var selectedDriver = Convert.ToString(_installedDriverComboBox.SelectedItem);
             return DriverCatalog.IsVendorFamilyMatch(_currentRecommendation.Vendor, selectedDriver) &&
                 !DriverCatalog.IsExactVendorMatch(_currentRecommendation.Vendor, selectedDriver);
+        }
+
+        private string GetPreferredVendor()
+        {
+            if (_currentRecommendation != null && _currentRecommendation.IsKnownVendor)
+            {
+                return _currentRecommendation.Vendor;
+            }
+
+            return _vendorComboBox.SelectedIndex > 0 ? Convert.ToString(_vendorComboBox.SelectedItem) : string.Empty;
+        }
+
+        private void ClearIncompatibleInstalledDriverSelection()
+        {
+            var selectedDriver = Convert.ToString(_installedDriverComboBox.SelectedItem);
+            if (!string.IsNullOrWhiteSpace(selectedDriver) &&
+                !DriverCatalog.IsCompatibleDriverName(selectedDriver, _modelTextBox.Text, GetPreferredVendor()))
+            {
+                _installedDriverComboBox.SelectedIndex = -1;
+            }
         }
 
         private void TestPlan()
@@ -524,9 +552,9 @@ namespace Printervention
             }
 
             var usingRecommendationPlaceholder = string.Equals(driverName, _currentRecommendation.RecommendedDriver, StringComparison.OrdinalIgnoreCase);
-            if (!DriverCatalog.IsAllowedDriverName(driverName, usingRecommendationPlaceholder ? null : _modelTextBox.Text))
+            if (!DriverCatalog.IsCompatibleDriverName(driverName, usingRecommendationPlaceholder ? null : _modelTextBox.Text, GetPreferredVendor()))
             {
-                throw new InvalidOperationException("The selected or recommended driver is not a model-specific non-v4 PCL/PCL6 driver.");
+                throw new InvalidOperationException("The selected or recommended driver is not a model-specific non-v4 PCL/PCL6 driver for this printer brand and model.");
             }
 
             if (_currentRecommendation.IsKnownVendor && !_currentRecommendation.IsAuthorizedUrl(_currentRecommendation.SupportUrl))

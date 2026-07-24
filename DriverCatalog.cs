@@ -87,6 +87,12 @@ namespace Printervention
             return !HasPreferredModelTerms(preferredModel) || LooksLikeModelSpecificDriver(driverName, preferredModel);
         }
 
+        public static bool IsCompatibleDriverName(string driverName, string preferredModel, string preferredVendor)
+        {
+            return IsAllowedDriverName(driverName, preferredModel) &&
+                !HasConflictingVendorFamily(driverName, preferredVendor);
+        }
+
         public static bool IsVendorFamilyMatch(string preferredVendor, string driverName)
         {
             if (string.IsNullOrWhiteSpace(preferredVendor) || string.IsNullOrWhiteSpace(driverName))
@@ -117,7 +123,81 @@ namespace Printervention
                 return new[] { "Ricoh", "Savin", "Lanier", "Gestetner", "Nashuatec", "Rex-Rotary", "Aficio" };
             }
 
-            return string.IsNullOrWhiteSpace(vendor) ? new string[0] : new[] { vendor };
+            if (string.IsNullOrWhiteSpace(vendor))
+            {
+                return new string[0];
+            }
+
+            if (vendor.Equals("Fujifilm", StringComparison.OrdinalIgnoreCase))
+            {
+                return new[] { "Fujifilm", "Fuji Xerox" };
+            }
+
+            if (vendor.Equals("HP", StringComparison.OrdinalIgnoreCase))
+            {
+                return new[] { "HP", "Hewlett-Packard", "Hewlett Packard" };
+            }
+
+            if (vendor.Equals("Konica Minolta", StringComparison.OrdinalIgnoreCase))
+            {
+                return new[] { "Konica Minolta", "Konica", "Minolta", "bizhub" };
+            }
+
+            if (vendor.Equals("Kyocera", StringComparison.OrdinalIgnoreCase))
+            {
+                return new[] { "Kyocera", "ECOSYS", "TASKalfa" };
+            }
+
+            if (vendor.Equals("OKI", StringComparison.OrdinalIgnoreCase))
+            {
+                return new[] { "OKI", "OKIDATA" };
+            }
+
+            if (vendor.Equals("Toshiba", StringComparison.OrdinalIgnoreCase))
+            {
+                return new[] { "Toshiba", "e-STUDIO" };
+            }
+
+            return new[] { vendor };
+        }
+
+        private static bool HasConflictingVendorFamily(string driverName, string preferredVendor)
+        {
+            if (string.IsNullOrWhiteSpace(driverName) || string.IsNullOrWhiteSpace(preferredVendor))
+            {
+                return false;
+            }
+
+            var preferredAliases = GetVendorFamilyAliases(preferredVendor);
+            if (preferredAliases.Any(alias => driverName.IndexOf(alias, StringComparison.OrdinalIgnoreCase) >= 0))
+            {
+                return false;
+            }
+
+            return KnownVendorFamilies()
+                .Where(family => !family.Any(alias => preferredAliases.Contains(alias, StringComparer.OrdinalIgnoreCase)))
+                .Any(family => family.Any(alias => driverName.IndexOf(alias, StringComparison.OrdinalIgnoreCase) >= 0));
+        }
+
+        private static IEnumerable<string[]> KnownVendorFamilies()
+        {
+            yield return new[] { "Brother" };
+            yield return new[] { "Canon" };
+            yield return new[] { "Epson" };
+            yield return new[] { "Fujifilm", "Fuji Xerox" };
+            yield return new[] { "Fujitsu" };
+            yield return new[] { "HP", "Hewlett-Packard", "Hewlett Packard" };
+            yield return new[] { "Konica", "Minolta", "bizhub" };
+            yield return new[] { "Kyocera", "ECOSYS", "TASKalfa" };
+            yield return new[] { "Lexmark" };
+            yield return new[] { "OKI", "OKIDATA" };
+            yield return new[] { "Panasonic" };
+            yield return new[] { "Pantum" };
+            yield return new[] { "Ricoh", "Savin", "Lanier", "Gestetner", "Nashuatec", "Rex-Rotary", "Aficio" };
+            yield return new[] { "Riso" };
+            yield return new[] { "Sharp" };
+            yield return new[] { "Toshiba", "e-STUDIO" };
+            yield return new[] { "Xerox" };
         }
 
         private static bool IsRicohFamilyName(string value)
