@@ -9,6 +9,7 @@ The first version targets .NET Framework 4.8 so it can run on commonly managed W
 - Discovers printer identity by SNMP first, then HTTP as a fallback.
 - Prompts to relaunch as administrator when not already elevated or running as `SYSTEM`.
 - Updates app-suggested queue names when a new printer is discovered.
+- Defaults the queue name to the detected or entered model while preserving any custom queue name the user enters.
 - Supports the requested major printer brands with a driver catalog.
 - Blocks PCL v4, class-driver, universal, global, and generic driver recommendations.
 - Resolves detected Canon C5800-series names to the exact Canon model support page and refuses Canon Generic Plus when no model-specific package is offered.

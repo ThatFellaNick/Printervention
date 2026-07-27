@@ -79,7 +79,7 @@ namespace Printervention
                 ColumnCount = 4,
                 AutoSize = true
             };
-            inputGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130));
+            inputGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 160));
             inputGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
             inputGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130));
             inputGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
@@ -93,6 +93,7 @@ namespace Printervention
             _modelTextBox = AddLabeledTextBox(inputGrid, "Model", 0, 1);
             _modelTextBox.TextChanged += (sender, args) =>
             {
+                UpdateSuggestedQueueName(_modelTextBox.Text);
                 UpdateRecommendation();
                 ClearIncompatibleInstalledDriverSelection();
             };
@@ -106,7 +107,7 @@ namespace Printervention
             inputGrid.Controls.Add(new Label { Text = "Brand", AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(0, 6, 8, 8) }, 2, 1);
             inputGrid.Controls.Add(_vendorComboBox, 3, 1);
 
-            _printerNameTextBox = AddLabeledTextBox(inputGrid, "Queue Name", 0, 2);
+            _printerNameTextBox = AddLabeledTextBox(inputGrid, "Queue Name (editable)", 0, 2);
             _printerNameTextBox.TextChanged += (sender, args) =>
             {
                 if (!_settingSuggestedQueueName)
