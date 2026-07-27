@@ -11,8 +11,8 @@ The first version targets .NET Framework 4.8 so it can run on commonly managed W
 - Updates app-suggested queue names when a new printer is discovered.
 - Defaults the queue name to the detected or entered model while preserving any custom queue name the user enters.
 - Supports the requested major printer brands with a driver catalog.
-- Blocks PCL v4, class-driver, universal, global, and generic driver recommendations.
-- Resolves detected Canon C5800-series names to the exact Canon model support page and refuses Canon Generic Plus when no model-specific package is offered.
+- Blocks PCL v4, class-driver, universal, global, and generic driver recommendations, except Canon Generic Plus PCL6 when Canon offers no model-specific package.
+- Resolves detected Canon C5800-series names to the exact Canon model support page and installs Canon's approved Generic Plus PCL6 fallback.
 - Shows an authorized vendor domain allowlist for driver downloads.
 - Creates a Standard TCP/IP printer port.
 - Can create a printer queue with a selected installed driver.
@@ -23,7 +23,7 @@ The first version targets .NET Framework 4.8 so it can run on commonly managed W
 - Includes a Test Plan button for no-printer validation.
 - Attempts to default the queue to black-and-white and one-sided printing.
 
-Driver package installation still depends on vendor-provided packages or drivers already staged/installed in Windows. Many vendor downloads require model-specific pages, EULAs, or package extraction, so the app intentionally points users to official vendor driver locations instead of silently scraping arbitrary installers. Any future direct-download work should validate URLs against the vendor allowlist in the catalog first and should prefer model-specific PCL/PCL6 drivers over universal, global, or generic packages.
+Driver package installation still depends on vendor-provided packages or drivers already staged/installed in Windows. Many vendor downloads require model-specific pages, EULAs, or package extraction, so the app intentionally points users to official vendor driver locations instead of silently scraping arbitrary installers. Any future direct-download work should validate URLs against the vendor allowlist in the catalog first and should prefer model-specific PCL/PCL6 drivers over universal, global, or generic packages. Canon Generic Plus PCL6 is the deliberate exception when Canon lists it as the supported PCL package for the detected model.
 
 ## Build
 

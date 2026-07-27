@@ -47,10 +47,8 @@ namespace Printervention
         {
             if (IsCanonC5800Series(recommendation))
             {
-                throw new CompliantDriverUnavailableException(
-                    "Canon's official page for this C5800-series model currently offers only Canon Generic Plus PCL6. " +
-                    "Printervention rejected that package because it is a common generic driver, not a model-specific driver. " +
-                    "No driver or print object was installed.");
+                // Canon currently publishes Generic Plus PCL6 as the supported PCL package for C5800 models.
+                return "https://downloads.canon.com/sss2026/drivers/Generic_Plus_PCL6_v3.40.zip";
             }
 
             using (var client = CreateWebClient())
@@ -59,11 +57,11 @@ namespace Printervention
                 var candidates = ExtractLinks(html, recommendation.SupportUrl)
                     .Where(candidate => recommendation.IsAuthorizedUrl(candidate.Url))
                     .Where(IsDriverDownloadCandidate)
-                    .Where(candidate => !IsBlockedDriverUrl(candidate.Url, candidate.Context))
+                    .Where(candidate => !IsBlockedDriverUrl(candidate.Url, candidate.Context, recommendation))
                     .ToList();
 
                 var preferred = candidates
-                    .OrderByDescending(ScoreDriverUrl)
+                    .OrderByDescending(candidate => ScoreDriverUrl(candidate, recommendation))
                     .FirstOrDefault();
 
                 if (preferred == null)
@@ -133,18 +131,22 @@ namespace Printervention
                 loweredContext.Contains("pcl6 driver"));
         }
 
-        private static bool IsBlockedDriverUrl(string url, string context)
+        private static bool IsBlockedDriverUrl(string url, string context, DriverRecommendation recommendation)
         {
             var lowered = (Uri.UnescapeDataString(url) + " " + context).ToLowerInvariant();
+            var isAllowedCanonGenericPlus = recommendation.Vendor.Equals("Canon", StringComparison.OrdinalIgnoreCase) &&
+                lowered.Contains("generic") &&
+                (lowered.Contains("pcl6") || lowered.Contains("pcl 6"));
+
             return lowered.Contains("universal") ||
                 lowered.Contains("global") ||
-                lowered.Contains("generic") ||
+                (lowered.Contains("generic") && !isAllowedCanonGenericPlus) ||
                 lowered.Contains(" v4") ||
                 lowered.Contains("v4_") ||
                 lowered.Contains("class");
         }
 
-        private static int ScoreDriverUrl(DriverDownloadCandidate candidate)
+        private static int ScoreDriverUrl(DriverDownloadCandidate candidate, DriverRecommendation recommendation)
         {
             var lowered = (Uri.UnescapeDataString(candidate.Url) + " " + candidate.Context).ToLowerInvariant();
             var score = 0;
@@ -166,6 +168,21 @@ namespace Printervention
             if (lowered.EndsWith(".exe"))
             {
                 score += 5;
+            }
+
+            if (lowered.Contains("generic"))
+            {
+                score -= 40;
+            }
+
+            foreach (var term in Regex.Matches(recommendation.ModelQuery ?? string.Empty, @"[A-Za-z]*\d+[A-Za-z0-9]*")
+                .Cast<Match>()
+                .Select(match => match.Value.ToLowerInvariant()))
+            {
+                if (lowered.Contains(term))
+                {
+                    score += 80;
+                }
             }
 
             return score;
@@ -299,14 +316,6 @@ namespace Printervention
         private static string Quote(string value)
         {
             return "\"" + value.Replace("\"", "\\\"") + "\"";
-        }
-    }
-
-    internal sealed class CompliantDriverUnavailableException : InvalidOperationException
-    {
-        public CompliantDriverUnavailableException(string message)
-            : base(message)
-        {
         }
     }
 

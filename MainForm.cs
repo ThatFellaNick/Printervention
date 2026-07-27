@@ -342,7 +342,8 @@ namespace Printervention
                 "Authorized vendor domains: " + _currentRecommendation.AuthorizedDomainDisplay + Environment.NewLine + Environment.NewLine +
                 "Rules:" + Environment.NewLine +
                 "- Use PCL or PCL6 only." + Environment.NewLine +
-                "- Use model-specific drivers when available; avoid universal, global, and generic drivers." + Environment.NewLine +
+                "- Prefer model-specific drivers; Canon Generic Plus PCL6 is allowed when Canon offers no model-specific PCL package." + Environment.NewLine +
+                "- Avoid all other universal, global, and generic drivers." + Environment.NewLine +
                 "- Do not use PCL v4, class drivers, IPP class drivers, or vendor app-only packages." + Environment.NewLine +
                 "- Download installers only from the authorized vendor domains shown above." + Environment.NewLine +
                 "- Use Install Driver and Print Object to stage the driver and create the Windows queue." + Environment.NewLine +
@@ -374,12 +375,6 @@ namespace Printervention
                 RefreshInstalledDrivers(_modelTextBox.Text);
                 SetStatus("Driver installed automatically.");
                 return _installedDriverComboBox.Items.Count > 0;
-            }
-            catch (CompliantDriverUnavailableException ex)
-            {
-                SetStatus(ex.Message);
-                MessageBox.Show(this, ex.Message, "No compliant model-specific driver", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return false;
             }
             catch (Exception ex)
             {

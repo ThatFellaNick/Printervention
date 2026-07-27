@@ -89,8 +89,49 @@ namespace Printervention
 
         public static bool IsCompatibleDriverName(string driverName, string preferredModel, string preferredVendor)
         {
-            return IsAllowedDriverName(driverName, preferredModel) &&
+            return IsAllowedDriverName(driverName, preferredModel, IsCanonGenericPlusAllowed(preferredVendor)) &&
                 !HasConflictingVendorFamily(driverName, preferredVendor);
+        }
+
+        private static bool IsAllowedDriverName(string driverName, string preferredModel, bool allowCanonGenericPlus)
+        {
+            if (string.IsNullOrWhiteSpace(driverName))
+            {
+                return false;
+            }
+
+            var name = driverName.ToLowerInvariant();
+            if (name.Contains(" v4") || name.EndsWith("v4") || name.Contains("class driver"))
+            {
+                return false;
+            }
+
+            if (name.Contains("universal") || name.Contains("global"))
+            {
+                return false;
+            }
+
+            var isCanonGenericPlus = allowCanonGenericPlus &&
+                name.Contains("canon generic plus") &&
+                (name.Contains("pcl 6") || name.Contains("pcl6"));
+            if (name.Contains("generic") && !isCanonGenericPlus)
+            {
+                return false;
+            }
+
+            if (!name.Contains("pcl"))
+            {
+                return false;
+            }
+
+            return isCanonGenericPlus ||
+                !HasPreferredModelTerms(preferredModel) ||
+                LooksLikeModelSpecificDriver(driverName, preferredModel);
+        }
+
+        private static bool IsCanonGenericPlusAllowed(string preferredVendor)
+        {
+            return string.Equals(preferredVendor, "Canon", StringComparison.OrdinalIgnoreCase);
         }
 
         public static bool IsVendorFamilyMatch(string preferredVendor, string driverName)
@@ -250,7 +291,7 @@ namespace Printervention
             return new List<VendorDriverProfile>
             {
                 new VendorDriverProfile("Brother", "Brother model-specific PCL6 printer driver", "https://support.brother.com/", "Use the exact model page and select the model-specific PCL/PCL6 package. Avoid universal, BR-Script, class, and v4 drivers.", new[] { "brother.com", "support.brother.com" }, "brother"),
-                new VendorDriverProfile("Canon", "Canon model-specific PCL6 printer driver", "https://www.usa.canon.com/support", "Use the exact model page and select a model-specific PCL6 package. Avoid Generic Plus, UFR II-only, PS-only, class, universal, and v4 packages.", new[] { "canon.com", "usa.canon.com", "downloads.canon.com" }, "canon"),
+                new VendorDriverProfile("Canon", "Canon model-specific PCL6 or Generic Plus PCL6 printer driver", "https://www.usa.canon.com/support", "Prefer an exact model-specific Canon PCL6 package. Canon Generic Plus PCL6 is allowed when Canon does not offer a model-specific package. Avoid UFR II-only, PS-only, class, universal, and v4 packages.", new[] { "canon.com", "usa.canon.com", "downloads.canon.com" }, "canon"),
                 new VendorDriverProfile("Epson", "Epson model-specific PCL6 printer driver", "https://epson.com/Support/sl/s", "Use the exact model page and select the model-specific PCL/PCL6 package when the device supports PCL. Avoid Universal Print Driver, ESC/P-R-only, class, and v4 packages.", new[] { "epson.com", "ftp.epson.com" }, "epson"),
                 new VendorDriverProfile("Fujifilm", "FUJIFILM model-specific PCL6 print driver", "https://support-fb.fujifilm.com/", "Use the exact FUJIFILM Business Innovation model page and select the model-specific PCL6 package. Avoid universal and v4 packages.", new[] { "fujifilm.com", "support-fb.fujifilm.com" }, "fujifilm", "fuji xerox"),
                 new VendorDriverProfile("Fujitsu", "Fujitsu PCL Printer Driver", "https://www.fujitsu.com/global/support/products/computing/peripheral/printers/", "Use the model-specific PCL driver when available. Fujitsu support varies heavily by printer family.", new[] { "fujitsu.com" }, "fujitsu"),
