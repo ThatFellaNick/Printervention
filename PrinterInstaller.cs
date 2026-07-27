@@ -66,6 +66,7 @@ namespace Printervention
 
             var infFiles = Directory.EnumerateFiles(folderPath, "*.inf", SearchOption.AllDirectories)
                 .Where(IsLikelyPrinterDriverInf)
+                .Where(IsNativeArchitectureInf)
                 .OrderBy(path => path)
                 .ToList();
 
@@ -432,6 +433,41 @@ namespace Printervention
             return true;
         }
 
+        private static bool IsNativeArchitectureInf(string path)
+        {
+            var segments = path.Split(new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }, StringSplitOptions.RemoveEmptyEntries);
+            var has64BitFolder = segments.Any(segment =>
+                segment.Equals("x64", StringComparison.OrdinalIgnoreCase) ||
+                segment.Equals("amd64", StringComparison.OrdinalIgnoreCase) ||
+                segment.Equals("64bit", StringComparison.OrdinalIgnoreCase));
+            var has32BitFolder = segments.Any(segment =>
+                segment.Equals("x86", StringComparison.OrdinalIgnoreCase) ||
+                segment.Equals("i386", StringComparison.OrdinalIgnoreCase) ||
+                segment.Equals("32bit", StringComparison.OrdinalIgnoreCase));
+
+            if (Environment.Is64BitOperatingSystem && has32BitFolder && !has64BitFolder)
+            {
+                return false;
+            }
+
+            if (!Environment.Is64BitOperatingSystem && has64BitFolder && !has32BitFolder)
+            {
+                return false;
+            }
+
+            // Some vendors do not use architecture folder names, so inspect the INF decorations too.
+            var architectureLines = File.ReadLines(path).Take(500).ToArray();
+            var targetsAmd64 = architectureLines.Any(line => line.IndexOf("NTamd64", StringComparison.OrdinalIgnoreCase) >= 0);
+            var targetsX86 = architectureLines.Any(line => line.IndexOf("NTx86", StringComparison.OrdinalIgnoreCase) >= 0);
+
+            if (Environment.Is64BitOperatingSystem)
+            {
+                return targetsAmd64 || !targetsX86;
+            }
+
+            return targetsX86 || !targetsAmd64;
+        }
+
         private static string NormalizeDriverName(string driverName)
         {
             if (string.IsNullOrWhiteSpace(driverName))
@@ -470,8 +506,11 @@ namespace Printervention
         private static void RegisterMatchingPrintDrivers(string infFile, string preferredModel, string preferredVendor, DriverStagingSummary result)
         {
             var registeredCount = 0;
+            var previouslyRegistered = new HashSet<string>(result.RegisteredDriverNames, StringComparer.OrdinalIgnoreCase);
             var names = GetDriverNamesFromInf(infFile)
                 .Where(name => DriverCatalog.IsCompatibleDriverName(name, preferredModel, preferredVendor))
+                .Where(name => !previouslyRegistered.Contains(name))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderByDescending(name => ScoreDriverName(name, preferredModel, preferredVendor))
                 .ToList();
 

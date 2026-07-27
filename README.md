@@ -18,6 +18,7 @@ The first version targets .NET Framework 4.8 so it can run on commonly managed W
 - Can create a printer queue with a selected installed driver.
 - Has an `Install Driver and Print Object` flow that tries automatic official download, extraction, driver staging, and Windows queue creation.
 - Driver staging tolerates partial package failures when at least one printer INF is added successfully.
+- Driver staging selects the native Windows architecture and registers duplicate INF driver names only once.
 - After staging, Printervention attempts to register the matching Windows print driver from the INF before creating the queue.
 - Cleans Windows driver-store names before calling `Add-Printer`.
 - Includes a Test Plan button for no-printer validation.
