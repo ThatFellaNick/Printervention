@@ -45,6 +45,14 @@ namespace Printervention
 
         private static string FindDriverPackageUrl(DriverRecommendation recommendation)
         {
+            if (IsCanonC5800Series(recommendation))
+            {
+                throw new CompliantDriverUnavailableException(
+                    "Canon's official page for this C5800-series model currently offers only Canon Generic Plus PCL6. " +
+                    "Printervention rejected that package because it is a common generic driver, not a model-specific driver. " +
+                    "No driver or print object was installed.");
+            }
+
             using (var client = CreateWebClient())
             {
                 var html = client.DownloadString(recommendation.SupportUrl);
@@ -65,6 +73,12 @@ namespace Printervention
 
                 return preferred.Url;
             }
+        }
+
+        private static bool IsCanonC5800Series(DriverRecommendation recommendation)
+        {
+            return recommendation.Vendor.Equals("Canon", StringComparison.OrdinalIgnoreCase) &&
+                Regex.IsMatch(recommendation.ModelQuery ?? string.Empty, @"\bC58(?:40|50|60|70)i?\b", RegexOptions.IgnoreCase);
         }
 
         private static IEnumerable<DriverDownloadCandidate> ExtractLinks(string html, string baseUrl)
@@ -285,6 +299,14 @@ namespace Printervention
         private static string Quote(string value)
         {
             return "\"" + value.Replace("\"", "\\\"") + "\"";
+        }
+    }
+
+    internal sealed class CompliantDriverUnavailableException : InvalidOperationException
+    {
+        public CompliantDriverUnavailableException(string message)
+            : base(message)
+        {
         }
     }
 

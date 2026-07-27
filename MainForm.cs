@@ -374,6 +374,12 @@ namespace Printervention
                 SetStatus("Driver installed automatically.");
                 return _installedDriverComboBox.Items.Count > 0;
             }
+            catch (CompliantDriverUnavailableException ex)
+            {
+                SetStatus(ex.Message);
+                MessageBox.Show(this, ex.Message, "No compliant model-specific driver", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return false;
+            }
             catch (Exception ex)
             {
                 SetStatus("Automatic install needs help: " + ex.Message);

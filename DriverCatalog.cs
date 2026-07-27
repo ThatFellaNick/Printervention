@@ -380,6 +380,15 @@ namespace Printervention
 
         private static string BuildSupportUrl(VendorDriverProfile profile, string model)
         {
+            if (profile.DisplayName.Equals("Canon", StringComparison.OrdinalIgnoreCase))
+            {
+                var canonSlug = BuildCanonModelSlug(model);
+                if (!string.IsNullOrWhiteSpace(canonSlug))
+                {
+                    return "https://www.usa.canon.com/support/p/" + canonSlug;
+                }
+            }
+
             if (profile.DisplayName.Equals("Ricoh", StringComparison.OrdinalIgnoreCase) ||
                 profile.DisplayName.Equals("Savin", StringComparison.OrdinalIgnoreCase))
             {
@@ -391,6 +400,23 @@ namespace Printervention
             }
 
             return profile.SupportUrl;
+        }
+
+        private static string BuildCanonModelSlug(string model)
+        {
+            if (string.IsNullOrWhiteSpace(model))
+            {
+                return string.Empty;
+            }
+
+            // Canon's SNMP name omits "ADVANCE DX" and the trailing "i" for this family.
+            var c5800Model = System.Text.RegularExpressions.Regex.Match(model, @"\bC58(?<speed>40|50|60|70)i?\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (c5800Model.Success)
+            {
+                return "imagerunner-advance-dx-c58" + c5800Model.Groups["speed"].Value + "i";
+            }
+
+            return string.Empty;
         }
 
         private static string BuildRicohModelSlug(string model)
