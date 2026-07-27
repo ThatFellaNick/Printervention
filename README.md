@@ -23,6 +23,7 @@ The first version targets .NET Framework 4.8 so it can run on commonly managed W
 - Cleans Windows driver-store names before calling `Add-Printer`.
 - Includes a Test Plan button for no-printer validation.
 - Attempts to default the queue to black-and-white and one-sided printing.
+- Disables Canon's separate Auto Color Detection setting so Canon preferences show `Black and White` rather than `Auto [Color/B&W]`.
 
 Driver package installation still depends on vendor-provided packages or drivers already staged/installed in Windows. Many vendor downloads require model-specific pages, EULAs, or package extraction, so the app intentionally points users to official vendor driver locations instead of silently scraping arbitrary installers. Any future direct-download work should validate URLs against the vendor allowlist in the catalog first and should prefer model-specific PCL/PCL6 drivers over universal, global, or generic packages. Canon Generic Plus PCL6 is the deliberate exception when Canon lists it as the supported PCL package for the detected model.
 

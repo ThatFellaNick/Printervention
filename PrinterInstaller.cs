@@ -172,7 +172,31 @@ namespace Printervention
             TryApplyWmiPrinterDefaults(printerName);
             TrySetPrinterSettings(printerName);
             RunPowerShell("Set-PrintConfiguration -PrinterName " + PsQuote(printerName) + " -Color $false -DuplexingMode OneSided", false);
+            TryApplyPrintTicketDefaults(printerName);
             RunPowerShell("Get-Printer -Name " + PsQuote(printerName) + " | Set-Printer -EnableBidi $true", false);
+        }
+
+        private static void TryApplyPrintTicketDefaults(string printerName)
+        {
+            // Canon exposes Auto Color Detection as a separate private feature. Setting only the
+            // standard monochrome flag leaves the Canon UI at Auto [Color/B&W].
+            var command =
+                "$configuration = Get-PrintConfiguration -PrinterName " + PsQuote(printerName) + "; " +
+                "[xml]$ticket = $configuration.PrintTicketXml; " +
+                "$namespaces = New-Object System.Xml.XmlNamespaceManager($ticket.NameTable); " +
+                "$namespaces.AddNamespace('psf', 'http://schemas.microsoft.com/windows/2003/08/printing/printschemaframework'); " +
+                "$colorOption = $ticket.SelectSingleNode(\"//psf:Feature[@name='psk:PageOutputColor']/psf:Option\", $namespaces); " +
+                "if ($colorOption) { $colorOption.SetAttribute('name', 'psk:Monochrome') }; " +
+                "$autoFeature = $ticket.SelectSingleNode(\"//psf:Feature[contains(@name, ':PageOutputColorAutoDetection')]\", $namespaces); " +
+                "if ($autoFeature) { " +
+                "  $autoOption = $autoFeature.SelectSingleNode('psf:Option', $namespaces); " +
+                "  $featureName = $autoFeature.GetAttribute('name'); " +
+                "  $prefixEnd = $featureName.IndexOf(':'); " +
+                "  if ($autoOption -and $prefixEnd -gt 0) { $autoOption.SetAttribute('name', $featureName.Substring(0, $prefixEnd) + ':None') } " +
+                "}; " +
+                "Set-PrintConfiguration -PrinterName " + PsQuote(printerName) + " -PrintTicketXml $ticket.OuterXml";
+
+            RunPowerShell(command, false);
         }
 
         private static void TryApplyWmiPrinterDefaults(string printerName)
@@ -368,7 +392,7 @@ namespace Printervention
 
         private static void RunPowerShell(string command, bool throwOnError)
         {
-            RunProcessWithOutput("powershell.exe", "-NoProfile -ExecutionPolicy Bypass -Command " + Quote(command), throwOnError);
+            RunProcessWithOutput("powershell.exe", "-NoProfile -Command " + Quote(command), throwOnError);
         }
 
         public static string RunProcessWithOutput(string fileName, string arguments, bool throwOnError)
