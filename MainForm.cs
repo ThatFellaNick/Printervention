@@ -45,6 +45,7 @@ namespace Printervention
         {
             _downloadService = new DriverDownloadService(_installer);
             Text = "Printervention";
+            Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
             MinimumSize = new Size(900, 650);
             ClientSize = new Size(1080, 720);
             StartPosition = FormStartPosition.CenterScreen;

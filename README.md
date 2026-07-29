@@ -1,5 +1,9 @@
 # Printervention
 
+<p align="center">
+  <img src="Assets/Printervention.png" alt="Printervention - We install printers the right way" width="420">
+</p>
+
 Printervention is a lightweight Windows printer setup helper. Enter a printer IP address, let the app identify the device when possible, then choose a supported non-v4 PCL or Kyocera KX driver path for the vendor.
 
 The first version targets .NET Framework 4.8 so it can run on commonly managed Windows systems without requiring a modern .NET runtime install.
