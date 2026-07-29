@@ -63,6 +63,22 @@ namespace Printervention
                 return "https://www.kyoceradocumentsolutions.us/content/dam/download-center-americas-cf/us/drivers/drivers/KX_Print_Driver_zip.download.zip";
             }
 
+            if (recommendation.Vendor.Equals("Brother", StringComparison.OrdinalIgnoreCase))
+            {
+                return FindBrotherDriverPackageUrl(recommendation);
+            }
+
+            if (recommendation.Vendor.Equals("Epson", StringComparison.OrdinalIgnoreCase))
+            {
+                return FindEpsonDriverPackageUrl(recommendation);
+            }
+
+            if (recommendation.Vendor.Equals("HP", StringComparison.OrdinalIgnoreCase))
+            {
+                // HP UPD is the approved fallback when no exact model-specific PCL6 driver is installed.
+                return "https://ftp.hp.com/pub/softlib/software13/printers/UPD/upd-pcl6-win10-x64-8.2.0.26778.zip";
+            }
+
             using (var client = CreateWebClient())
             {
                 var html = client.DownloadString(recommendation.SupportUrl);
@@ -85,6 +101,99 @@ namespace Printervention
             }
         }
 
+        private static string FindBrotherDriverPackageUrl(DriverRecommendation recommendation)
+        {
+            using (var client = CreateWebClient())
+            {
+                var searchHtml = client.DownloadString(recommendation.SupportUrl);
+                var productPage = ExtractAnchorLinks(searchHtml, recommendation.SupportUrl)
+                    .Where(link => link.Url.IndexOf("downloadtop.aspx", StringComparison.OrdinalIgnoreCase) >= 0)
+                    .OrderByDescending(link => ScoreModelLink(link, recommendation.ModelQuery))
+                    .FirstOrDefault();
+                if (productPage == null || ScoreModelLink(productPage, recommendation.ModelQuery) == 0)
+                {
+                    throw new InvalidOperationException("Brother did not return an exact product page for this model.");
+                }
+
+                var productHtml = client.DownloadString(productPage.Url);
+                var osPage = ExtractLinks(productHtml, productPage.Url)
+                    .Where(link => link.Url.IndexOf("downloadlist.aspx", StringComparison.OrdinalIgnoreCase) >= 0)
+                    .OrderByDescending(link => link.Url.IndexOf("os=10068", StringComparison.OrdinalIgnoreCase) >= 0 ? 2 :
+                        link.Url.IndexOf("os=10013", StringComparison.OrdinalIgnoreCase) >= 0 ? 1 : 0)
+                    .FirstOrDefault();
+                if (osPage == null)
+                {
+                    throw new InvalidOperationException("Brother did not list a Windows driver page for this model.");
+                }
+
+                var driverListHtml = client.DownloadString(osPage.Url);
+                var driverDetails = ExtractAnchorLinks(driverListHtml, osPage.Url)
+                    .FirstOrDefault(link => link.Url.IndexOf("downloadend.aspx", StringComparison.OrdinalIgnoreCase) >= 0 &&
+                        link.Text.Equals("Printer Driver", StringComparison.OrdinalIgnoreCase));
+                if (driverDetails == null)
+                {
+                    throw new InvalidOperationException("Brother did not list an exact-model Printer Driver package for this model.");
+                }
+
+                var detailsHtml = client.DownloadString(driverDetails.Url);
+                var agreementLink = ExtractAnchorLinks(detailsHtml, driverDetails.Url)
+                    .FirstOrDefault(link => link.Url.IndexOf("downloadhowto.aspx", StringComparison.OrdinalIgnoreCase) >= 0);
+                if (agreementLink == null)
+                {
+                    throw new InvalidOperationException("Brother's driver agreement page did not expose a download link.");
+                }
+
+                var downloadHtml = client.DownloadString(agreementLink.Url);
+                var package = ExtractAnchorLinks(downloadHtml, agreementLink.Url)
+                    .FirstOrDefault(link => link.Url.IndexOf("download.brother.com", StringComparison.OrdinalIgnoreCase) >= 0);
+                if (package == null || !recommendation.IsAuthorizedUrl(package.Url))
+                {
+                    throw new InvalidOperationException("Brother's final package URL was not on an authorized Brother domain.");
+                }
+
+                return package.Url;
+            }
+        }
+
+        private static string FindEpsonDriverPackageUrl(DriverRecommendation recommendation)
+        {
+            using (var client = CreateWebClient())
+            {
+                var searchHtml = client.DownloadString(recommendation.SupportUrl);
+                var modelPage = ExtractAnchorLinks(searchHtml, recommendation.SupportUrl)
+                    .Where(link => link.Url.IndexOf("/Support/", StringComparison.OrdinalIgnoreCase) >= 0)
+                    .OrderByDescending(link => ScoreModelLink(link, recommendation.ModelQuery))
+                    .FirstOrDefault();
+                if (modelPage == null || ScoreModelLink(modelPage, recommendation.ModelQuery) == 0)
+                {
+                    throw new InvalidOperationException("Epson did not return an exact support page for this model.");
+                }
+
+                var modelHtml = client.DownloadString(modelPage.Url);
+                var package = ExtractLinks(modelHtml, modelPage.Url)
+                    .Where(candidate => recommendation.IsAuthorizedUrl(candidate.Url))
+                    .Where(IsDriverDownloadCandidate)
+                    .Where(candidate => !IsBlockedDriverUrl(candidate.Url, candidate.Context, recommendation))
+                    .OrderByDescending(candidate => ScoreDriverUrl(candidate, recommendation) +
+                        (candidate.Url.IndexOf("Core_X64", StringComparison.OrdinalIgnoreCase) >= 0 ? 25 : 0))
+                    .FirstOrDefault();
+                if (package == null)
+                {
+                    throw new InvalidOperationException("Epson did not list an exact-model PCL6 package for this model.");
+                }
+
+                return package.Url;
+            }
+        }
+
+        private static int ScoreModelLink(DriverDownloadCandidate link, string model)
+        {
+            var combined = (link.Url + " " + link.Text).Replace("-", string.Empty).Replace(" ", string.Empty);
+            return Regex.Matches(model ?? string.Empty, @"[A-Za-z]*\d+[A-Za-z0-9]*")
+                .Cast<Match>()
+                .Count(match => combined.IndexOf(match.Value.Replace("-", string.Empty), StringComparison.OrdinalIgnoreCase) >= 0);
+        }
+
         private static bool IsCanonC5800Series(DriverRecommendation recommendation)
         {
             return recommendation.Vendor.Equals("Canon", StringComparison.OrdinalIgnoreCase) &&
@@ -94,7 +203,7 @@ namespace Printervention
         private static IEnumerable<DriverDownloadCandidate> ExtractLinks(string html, string baseUrl)
         {
             var links = new List<DriverDownloadCandidate>();
-            foreach (Match match in Regex.Matches(html ?? string.Empty, "(?:href|src)\\s*=\\s*[\"'](?<url>[^\"']+)[\"']", RegexOptions.IgnoreCase))
+            foreach (Match match in Regex.Matches(html ?? string.Empty, "(?:href|src|value)\\s*=\\s*[\"'](?<url>[^\"']+)[\"']", RegexOptions.IgnoreCase))
             {
                 var value = WebUtility.HtmlDecode(match.Groups["url"].Value);
                 Uri parsed;
@@ -112,6 +221,21 @@ namespace Printervention
             return links
                 .GroupBy(candidate => candidate.Url, StringComparer.OrdinalIgnoreCase)
                 .Select(group => group.First());
+        }
+
+        private static IEnumerable<DriverDownloadCandidate> ExtractAnchorLinks(string html, string baseUrl)
+        {
+            foreach (Match match in Regex.Matches(html ?? string.Empty,
+                "<a[^>]+href\\s*=\\s*[\"'](?<url>[^\"']+)[\"'][^>]*>(?<text>.*?)</a>",
+                RegexOptions.IgnoreCase | RegexOptions.Singleline))
+            {
+                Uri parsed;
+                if (Uri.TryCreate(new Uri(baseUrl), WebUtility.HtmlDecode(match.Groups["url"].Value), out parsed))
+                {
+                    var text = WebUtility.HtmlDecode(Regex.Replace(match.Groups["text"].Value, "<[^>]+>", " ")).Trim();
+                    yield return new DriverDownloadCandidate(parsed.AbsoluteUri, text, text);
+                }
+            }
         }
 
         private static string ExtractContext(string html, int index)
@@ -237,7 +361,9 @@ namespace Printervention
 
             if (extension == ".exe")
             {
-                if (TryExtractWithSevenZip(packagePath, extractFolder) || TryExtractSelfExtractor(packagePath, extractFolder))
+                if (TryExtractWithSevenZip(packagePath, extractFolder) ||
+                    TryExtractEmbeddedZip(packagePath, extractFolder) ||
+                    TryExtractSelfExtractor(packagePath, extractFolder))
                 {
                     return extractFolder;
                 }
@@ -245,6 +371,47 @@ namespace Printervention
 
             File.Copy(packagePath, Path.Combine(extractFolder, Path.GetFileName(packagePath)), true);
             return extractFolder;
+        }
+
+        private static bool TryExtractEmbeddedZip(string packagePath, string extractFolder)
+        {
+            try
+            {
+                var bytes = File.ReadAllBytes(packagePath);
+                for (var index = bytes.Length - 22; index >= 0; index--)
+                {
+                    if (bytes[index] != 0x50 || bytes[index + 1] != 0x4B ||
+                        bytes[index + 2] != 0x05 || bytes[index + 3] != 0x06)
+                    {
+                        continue;
+                    }
+
+                    var centralDirectorySize = BitConverter.ToUInt32(bytes, index + 12);
+                    var centralDirectoryOffset = BitConverter.ToUInt32(bytes, index + 16);
+                    var archiveStart = index - centralDirectorySize - centralDirectoryOffset;
+                    if (archiveStart < 0 || archiveStart >= index)
+                    {
+                        continue;
+                    }
+
+                    var embeddedZip = Path.Combine(extractFolder, "embedded-driver.zip");
+                    using (var output = File.Create(embeddedZip))
+                    {
+                        output.Write(bytes, (int)archiveStart, bytes.Length - (int)archiveStart);
+                    }
+
+                    var embeddedFolder = Path.Combine(extractFolder, "embedded");
+                    Directory.CreateDirectory(embeddedFolder);
+                    ZipFile.ExtractToDirectory(embeddedZip, embeddedFolder);
+                    return Directory.EnumerateFiles(embeddedFolder, "*.inf", SearchOption.AllDirectories).Any();
+                }
+            }
+            catch
+            {
+                // Not every vendor EXE contains a conventional ZIP overlay.
+            }
+
+            return false;
         }
 
         private static bool TryExtractWithSevenZip(string packagePath, string extractFolder)
@@ -334,13 +501,20 @@ namespace Printervention
     internal sealed class DriverDownloadCandidate
     {
         public DriverDownloadCandidate(string url, string context)
+            : this(url, context, context)
+        {
+        }
+
+        public DriverDownloadCandidate(string url, string context, string text)
         {
             Url = url;
             Context = context ?? string.Empty;
+            Text = text ?? string.Empty;
         }
 
         public string Url { get; private set; }
         public string Context { get; private set; }
+        public string Text { get; private set; }
     }
 
     internal sealed class DriverInstallResult

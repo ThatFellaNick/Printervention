@@ -11,8 +11,11 @@ The first version targets .NET Framework 4.8 so it can run on commonly managed W
 - Updates app-suggested queue names when a new printer is discovered.
 - Defaults the queue name to the detected or entered model while preserving any custom queue name the user enters.
 - Supports the requested major printer brands with a driver catalog.
-- Blocks PCL v4, class-driver, universal, global, and generic driver recommendations, except Canon Generic Plus PCL6 when Canon offers no model-specific package.
+- Blocks PCL v4, class-driver, universal, global, and generic driver recommendations, except Canon Generic Plus PCL6 and HP Universal Printing PCL 6 when an exact-model package is unavailable.
 - Resolves detected Canon C5800-series names to the exact Canon model support page and installs Canon's approved Generic Plus PCL6 fallback.
+- Resolves Brother and Epson models through their official product searches and selects exact-model printer/PCL6 packages.
+- Accepts exact-model Brother driver names that omit `PCL`, while continuing to reject Brother generic, universal, BR-Script, XPS, class, and v4 drivers.
+- Prefers installed exact-model HP PCL6 drivers and uses HP's signed Type 3 Universal Printing PCL 6 package only as the HP fallback.
 - Shows an authorized vendor domain allowlist for driver downloads.
 - Creates a Standard TCP/IP printer port.
 - Can create a printer queue with a selected installed driver.
@@ -25,7 +28,7 @@ The first version targets .NET Framework 4.8 so it can run on commonly managed W
 - Attempts to default the queue to black-and-white and one-sided printing.
 - Disables Canon's separate Auto Color Detection setting so Canon preferences show `Black and White` rather than `Auto [Color/B&W]`.
 
-Driver package installation still depends on vendor-provided packages or drivers already staged/installed in Windows. Many vendor downloads require model-specific pages, EULAs, or package extraction, so the app intentionally points users to official vendor driver locations instead of silently scraping arbitrary installers. Any future direct-download work should validate URLs against the vendor allowlist in the catalog first and should prefer model-specific PCL/PCL6 drivers over universal, global, or generic packages. Canon Generic Plus PCL6 is the deliberate Canon exception. Kyocera's official KX package is also supported, but Printervention accepts only the exact model's KX registration and rejects generic, Classic Universal, XPS, and v4 entries.
+Driver package installation still depends on vendor-provided packages or drivers already staged/installed in Windows. Many vendor downloads require model-specific pages, EULAs, or package extraction, so the app intentionally follows official vendor locations instead of scraping arbitrary installers. URLs are checked against the vendor allowlist. Canon Generic Plus PCL6 and HP Universal Printing PCL 6 are narrow vendor-approved fallbacks; other universal, global, and generic packages remain blocked. Kyocera's official KX package is supported only for the exact model registration.
 
 ## Build
 

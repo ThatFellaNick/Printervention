@@ -91,7 +91,9 @@ namespace Printervention
         public static bool IsCompatibleDriverName(string driverName, string preferredModel, string preferredVendor)
         {
             var isAllowed = IsAllowedDriverName(driverName, preferredModel, IsCanonGenericPlusAllowed(preferredVendor)) ||
-                IsAllowedKyoceraKxDriver(driverName, preferredModel, preferredVendor);
+                IsAllowedKyoceraKxDriver(driverName, preferredModel, preferredVendor) ||
+                IsAllowedBrotherModelDriver(driverName, preferredModel, preferredVendor) ||
+                IsAllowedHpUniversalPcl6Driver(driverName, preferredVendor);
 
             return isAllowed &&
                 !HasConflictingVendorFamily(driverName, preferredVendor);
@@ -158,6 +160,36 @@ namespace Printervention
             // A KX package contains many models, so never accept one without an exact model term.
             return HasPreferredModelTerms(preferredModel) &&
                 LooksLikeModelSpecificDriver(driverName, preferredModel);
+        }
+
+        private static bool IsAllowedBrotherModelDriver(string driverName, string preferredModel, string preferredVendor)
+        {
+            if (!string.Equals(preferredVendor, "Brother", StringComparison.OrdinalIgnoreCase) ||
+                string.IsNullOrWhiteSpace(driverName))
+            {
+                return false;
+            }
+
+            var name = driverName.ToLowerInvariant();
+            return name.Contains("brother") &&
+                !name.Contains("universal") && !name.Contains("generic") &&
+                !name.Contains("br-script") && !name.Contains("postscript") &&
+                !name.Contains(" xps") && !name.Contains(" v4") && !name.Contains("class driver") &&
+                HasPreferredModelTerms(preferredModel) && LooksLikeModelSpecificDriver(driverName, preferredModel);
+        }
+
+        private static bool IsAllowedHpUniversalPcl6Driver(string driverName, string preferredVendor)
+        {
+            if (!string.Equals(preferredVendor, "HP", StringComparison.OrdinalIgnoreCase) ||
+                string.IsNullOrWhiteSpace(driverName))
+            {
+                return false;
+            }
+
+            var name = driverName.ToLowerInvariant();
+            return name.Contains("hp universal printing") &&
+                (name.Contains("pcl 6") || name.Contains("pcl6")) &&
+                !name.Contains(" v4") && !name.EndsWith("v4") && !name.Contains("class driver");
         }
 
         public static bool IsVendorFamilyMatch(string preferredVendor, string driverName)
@@ -316,12 +348,12 @@ namespace Printervention
         {
             return new List<VendorDriverProfile>
             {
-                new VendorDriverProfile("Brother", "Brother model-specific PCL6 printer driver", "https://support.brother.com/", "Use the exact model page and select the model-specific PCL/PCL6 package. Avoid universal, BR-Script, class, and v4 drivers.", new[] { "brother.com", "support.brother.com" }, "brother"),
+                new VendorDriverProfile("Brother", "Brother exact-model printer driver for PCL-capable devices", "https://support.brother.com/", "Use the exact-model Brother Printer Driver package. Brother driver names may omit PCL even when the device uses PCL emulation. Avoid universal, generic, BR-Script, class, and v4 drivers.", new[] { "brother.com", "support.brother.com", "download.brother.com" }, "brother"),
                 new VendorDriverProfile("Canon", "Canon model-specific PCL6 or Generic Plus PCL6 printer driver", "https://www.usa.canon.com/support", "Prefer an exact model-specific Canon PCL6 package. Canon Generic Plus PCL6 is allowed when Canon does not offer a model-specific package. Avoid UFR II-only, PS-only, class, universal, and v4 packages.", new[] { "canon.com", "usa.canon.com", "downloads.canon.com" }, "canon"),
                 new VendorDriverProfile("Epson", "Epson model-specific PCL6 printer driver", "https://epson.com/Support/sl/s", "Use the exact model page and select the model-specific PCL/PCL6 package when the device supports PCL. Avoid Universal Print Driver, ESC/P-R-only, class, and v4 packages.", new[] { "epson.com", "ftp.epson.com" }, "epson"),
                 new VendorDriverProfile("Fujifilm", "FUJIFILM model-specific PCL6 print driver", "https://support-fb.fujifilm.com/", "Use the exact FUJIFILM Business Innovation model page and select the model-specific PCL6 package. Avoid universal and v4 packages.", new[] { "fujifilm.com", "support-fb.fujifilm.com" }, "fujifilm", "fuji xerox"),
                 new VendorDriverProfile("Fujitsu", "Fujitsu PCL Printer Driver", "https://www.fujitsu.com/global/support/products/computing/peripheral/printers/", "Use the model-specific PCL driver when available. Fujitsu support varies heavily by printer family.", new[] { "fujitsu.com" }, "fujitsu"),
-                new VendorDriverProfile("HP", "HP model-specific PCL6 printer driver", "https://support.hp.com/drivers", "Use the exact model page and select the model-specific PCL6 package. Avoid HP Universal Print Driver, HP Smart, IPP class, and v4 packages.", new[] { "hp.com", "support.hp.com", "ftp.hp.com", "hpe.com" }, "hewlett-packard", "hewlett packard", "hp"),
+                new VendorDriverProfile("HP", "HP model-specific PCL6, or HP Universal Printing PCL 6 fallback", "https://support.hp.com/drivers", "Prefer an installed exact-model HP PCL6 driver. When HP offers no model-specific PCL6 package, HP Universal Printing PCL 6 Type 3 is allowed. Avoid HP Smart Universal v4, IPP class, and all non-PCL packages.", new[] { "hp.com", "support.hp.com", "ftp.hp.com", "hpe.com" }, "hewlett-packard", "hewlett packard", "hp"),
                 new VendorDriverProfile("Konica Minolta", "Konica Minolta model-specific PCL driver", "https://kmbs.konicaminolta.us/support-downloads/", "Use the exact model page and select the model-specific PCL/PCL6 package. Avoid Universal PCL, PS-only, class, and v4 packages.", new[] { "konicaminolta.us", "kmbs.konicaminolta.us", "konicaminolta.com" }, "konica", "minolta", "bizhub"),
                 new VendorDriverProfile("Kyocera", "Kyocera model-specific KX/PCL driver", "https://www.kyoceradocumentsolutions.us/en/support/downloads.html", "Use the exact model page and select the model-specific KX/PCL or PCL6 package. Avoid Classic Universal, class, and v4 packages.", new[] { "kyoceradocumentsolutions.us", "kyoceradocumentsolutions.com", "kyocera.com" }, "kyocera", "ecosys", "taskalfa"),
                 new VendorDriverProfile("Lexmark", "Lexmark model-specific PCL XL driver", "https://www.lexmark.com/en_us/support/download-search.html", "Use the exact model page and select the model-specific PCL/PCL XL package. Avoid Universal Print Driver, class, and v4 packages.", new[] { "lexmark.com", "downloads.lexmark.com" }, "lexmark"),
@@ -454,6 +486,17 @@ namespace Printervention
                 {
                     return "https://www.usa.canon.com/support/p/" + canonSlug;
                 }
+            }
+
+            if (profile.DisplayName.Equals("Brother", StringComparison.OrdinalIgnoreCase))
+            {
+                return "https://support.brother.com/g/b/productlist.aspx?c=us&lang=en&content=dl&q=" +
+                    Uri.EscapeDataString(model ?? string.Empty);
+            }
+
+            if (profile.DisplayName.Equals("Epson", StringComparison.OrdinalIgnoreCase))
+            {
+                return "https://epson.com/Search?q=" + Uri.EscapeDataString(model ?? string.Empty);
             }
 
             if (profile.DisplayName.Equals("Ricoh", StringComparison.OrdinalIgnoreCase) ||
