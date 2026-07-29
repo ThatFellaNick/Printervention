@@ -10,12 +10,12 @@ The first version targets .NET Framework 4.8 so it can run on commonly managed W
 
 ## Download
 
-Download the current portable Windows executable from [GitHub Releases](https://github.com/ThatFellaNick/Printervention/releases/latest). Printervention requests administrator rights through its standard Windows manifest because driver staging and print queue creation require elevation.
+Download the current portable Windows executable from [GitHub Releases](https://github.com/ThatFellaNick/Printervention/releases/latest). Printervention does not request elevation or relaunch itself. Start it with **Run as administrator**, or run it as `SYSTEM` in ScreenConnect Backstage, before installing drivers and queues.
 
 ## Current behavior
 
 - Discovers printer identity by SNMP first, then HTTP as a fallback.
-- Uses the standard Windows application manifest to request administrator rights before startup; ScreenConnect `SYSTEM` sessions already satisfy this requirement.
+- Uses an `asInvoker` Windows manifest with no self-elevation, UAC relaunch, or administrator identity inspection.
 - Updates app-suggested queue names when a new printer is discovered.
 - Defaults the queue name to the detected or entered model while preserving any custom queue name the user enters.
 - Supports the requested major printer brands with a driver catalog.

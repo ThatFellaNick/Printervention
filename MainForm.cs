@@ -79,9 +79,28 @@ namespace Printervention
                 Text = "Printervention",
                 AutoSize = true,
                 Font = new Font(Font.FontFamily, 18F, FontStyle.Bold),
+                Margin = new Padding(0, 0, 0, 2)
+            };
+
+            var securityContextNotice = new Label
+            {
+                Text = "Installation requires Run as administrator or ScreenConnect Backstage (SYSTEM).",
+                AutoSize = true,
+                ForeColor = Color.DarkRed,
                 Margin = new Padding(0, 0, 0, 10)
             };
-            root.Controls.Add(title);
+
+            var heading = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                AutoSize = true,
+                FlowDirection = FlowDirection.TopDown,
+                WrapContents = false,
+                Margin = Padding.Empty
+            };
+            heading.Controls.Add(title);
+            heading.Controls.Add(securityContextNotice);
+            root.Controls.Add(heading);
 
             var inputGrid = new TableLayoutPanel
             {
