@@ -8,6 +8,10 @@ Printervention is a lightweight Windows printer setup helper. Enter a printer IP
 
 The first version targets .NET Framework 4.8 so it can run on commonly managed Windows systems without requiring a modern .NET runtime install.
 
+## Download
+
+Download the current portable Windows executable from [GitHub Releases](https://github.com/ThatFellaNick/Printervention/releases/latest). Printervention requests administrator rights through its standard Windows manifest because driver staging and print queue creation require elevation.
+
 ## Current behavior
 
 - Discovers printer identity by SNMP first, then HTTP as a fallback.
