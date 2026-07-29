@@ -30,7 +30,8 @@ Download the current portable Windows executable from [GitHub Releases](https://
 - Lets operators discover several printers, add each one to an install list, and install the full batch in sequence.
 - Tracks driver resolution, queue creation, success, and failure separately for every printer so one failure does not stop the remaining installs.
 - Lets operators load a selected row back into the entry fields for correction and retry.
-- The `Install All` flow tries automatic official download, extraction, driver staging, and Windows queue creation for each pending row.
+- The `Install All` flow tries automatic official download, safe archive extraction, driver staging, and Windows queue creation for each pending row.
+- Downloaded vendor executables are never launched. ZIP/CAB packages and embedded ZIP data can be handled automatically; other vendor EXEs must be extracted or run by the operator, then loaded with **Stage Extracted Driver Folder**.
 - Driver staging tolerates partial package failures when at least one printer INF is added successfully.
 - Driver staging selects the native Windows architecture and registers duplicate INF driver names only once.
 - After staging, Printervention attempts to register the matching Windows print driver from the INF before creating the queue.
@@ -38,11 +39,11 @@ Download the current portable Windows executable from [GitHub Releases](https://
 - Includes a Test Plan button for no-printer validation.
 - Attempts to default the queue to black-and-white and one-sided printing.
 - Disables Canon's separate Auto Color Detection setting so Canon preferences show `Black and White` rather than `Auto [Color/B&W]`.
-- Uses fully qualified Windows system-tool paths and avoids PowerShell execution-policy overrides.
+- Creates queues through the Windows spooler API and applies print tickets through .NET Framework; it does not launch PowerShell.
 
 ## Antivirus and signing
 
-Printervention is intentionally transparent about behaviors that security products inspect closely: it downloads driver packages from cataloged vendor domains, extracts them, stages signed printer INFs with Windows `pnputil`, and creates print queues. The source code and authorized-domain catalog are included in this repository.
+Printervention is intentionally transparent about behaviors that security products inspect closely: it downloads driver packages from cataloged vendor domains, extracts supported archives as data, stages signed printer INFs with Windows `pnputil`, and creates print queues through the Windows spooler API. It never executes a downloaded package. The source code and authorized-domain catalog are included in this repository.
 
 Release executables should be signed consistently with a trusted code-signing identity and timestamped. Unsigned builds receive no transferable publisher reputation, so every changed file hash can initially be treated as unknown by Microsoft Defender SmartScreen or antivirus machine-learning systems. A self-signed certificate does not provide public reputation.
 

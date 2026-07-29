@@ -5,14 +5,17 @@
 
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Diagnostics;
-using System.Drawing.Printing;
 using System.IO;
 using System.Linq;
 using System.Management;
 using System.Net;
+using System.Printing;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Xml;
 
 namespace Printervention
 {
@@ -166,33 +169,64 @@ namespace Printervention
         private static void ApplyPrinterDefaults(string printerName)
         {
             TryApplyWmiPrinterDefaults(printerName);
-            TrySetPrinterSettings(printerName);
-            RunPowerShell("Set-PrintConfiguration -PrinterName " + PsQuote(printerName) + " -Color $false -DuplexingMode OneSided", false);
-            TryApplyPrintTicketDefaults(printerName);
-            RunPowerShell("Get-Printer -Name " + PsQuote(printerName) + " | Set-Printer -EnableBidi $true", false);
+            TryApplyManagedPrintTicketDefaults(printerName);
         }
 
-        private static void TryApplyPrintTicketDefaults(string printerName)
+        private static void TryApplyManagedPrintTicketDefaults(string printerName)
         {
-            // Canon exposes Auto Color Detection as a separate private feature. Setting only the
-            // standard monochrome flag leaves the Canon UI at Auto [Color/B&W].
-            var command =
-                "$configuration = Get-PrintConfiguration -PrinterName " + PsQuote(printerName) + "; " +
-                "[xml]$ticket = $configuration.PrintTicketXml; " +
-                "$namespaces = New-Object System.Xml.XmlNamespaceManager($ticket.NameTable); " +
-                "$namespaces.AddNamespace('psf', 'http://schemas.microsoft.com/windows/2003/08/printing/printschemaframework'); " +
-                "$colorOption = $ticket.SelectSingleNode(\"//psf:Feature[@name='psk:PageOutputColor']/psf:Option\", $namespaces); " +
-                "if ($colorOption) { $colorOption.SetAttribute('name', 'psk:Monochrome') }; " +
-                "$autoFeature = $ticket.SelectSingleNode(\"//psf:Feature[contains(@name, ':PageOutputColorAutoDetection')]\", $namespaces); " +
-                "if ($autoFeature) { " +
-                "  $autoOption = $autoFeature.SelectSingleNode('psf:Option', $namespaces); " +
-                "  $featureName = $autoFeature.GetAttribute('name'); " +
-                "  $prefixEnd = $featureName.IndexOf(':'); " +
-                "  if ($autoOption -and $prefixEnd -gt 0) { $autoOption.SetAttribute('name', $featureName.Substring(0, $prefixEnd) + ':None') } " +
-                "}; " +
-                "Set-PrintConfiguration -PrinterName " + PsQuote(printerName) + " -PrintTicketXml $ticket.OuterXml";
+            try
+            {
+                using (var server = new LocalPrintServer())
+                using (var queue = server.GetPrintQueue(printerName))
+                {
+                    var baseTicket = queue.DefaultPrintTicket ?? new PrintTicket();
+                    var requestedTicket = DisableVendorAutoColor(baseTicket);
+                    requestedTicket.OutputColor = OutputColor.Monochrome;
+                    requestedTicket.Duplexing = Duplexing.OneSided;
 
-            RunPowerShell(command, false);
+                    var validated = queue.MergeAndValidatePrintTicket(baseTicket, requestedTicket);
+                    queue.DefaultPrintTicket = validated.ValidatedPrintTicket;
+                    queue.Commit();
+                }
+            }
+            catch
+            {
+                // Vendor drivers vary; WMI defaults still provide a conservative fallback.
+            }
+        }
+
+        private static PrintTicket DisableVendorAutoColor(PrintTicket ticket)
+        {
+            // Canon exposes Auto Color Detection as a private feature in addition to PageOutputColor.
+            using (var source = ticket.GetXmlStream())
+            {
+                var document = new XmlDocument { PreserveWhitespace = true };
+                document.Load(source);
+
+                var namespaces = new XmlNamespaceManager(document.NameTable);
+                namespaces.AddNamespace("psf", "http://schemas.microsoft.com/windows/2003/08/printing/printschemaframework");
+                var autoFeatures = document.SelectNodes("//psf:Feature[contains(@name, ':PageOutputColorAutoDetection')]", namespaces);
+                if (autoFeatures != null)
+                {
+                    foreach (XmlElement feature in autoFeatures)
+                    {
+                        var option = feature.SelectSingleNode("psf:Option", namespaces) as XmlElement;
+                        var featureName = feature.GetAttribute("name");
+                        var prefixEnd = featureName.IndexOf(':');
+                        if (option != null && prefixEnd > 0)
+                        {
+                            option.SetAttribute("name", featureName.Substring(0, prefixEnd) + ":None");
+                        }
+                    }
+                }
+
+                using (var updated = new MemoryStream())
+                {
+                    document.Save(updated);
+                    updated.Position = 0;
+                    return new PrintTicket(updated);
+                }
+            }
         }
 
         private static void TryApplyWmiPrinterDefaults(string printerName)
@@ -220,21 +254,7 @@ namespace Printervention
             }
             catch
             {
-                // The PowerShell print module still gets a chance to apply B&W and simplex defaults.
-            }
-        }
-
-        private static void TrySetPrinterSettings(string printerName)
-        {
-            try
-            {
-                var settings = new PrinterSettings { PrinterName = printerName };
-                settings.DefaultPageSettings.Color = false;
-                settings.DefaultPageSettings.PrinterSettings.Duplex = Duplex.Simplex;
-            }
-            catch
-            {
-                // Some drivers do not expose defaults through managed print settings.
+                // The managed PrintTicket path still gets a chance to apply the defaults.
             }
         }
 
@@ -265,8 +285,8 @@ namespace Printervention
             {
                 try
                 {
-                    attempted.Add("Add-Printer: " + candidate);
-                    RunPowerShell("Add-Printer -Name " + PsQuote(printerName) + " -DriverName " + PsQuote(candidate) + " -PortName " + PsQuote(portName), true);
+                    attempted.Add("Windows spooler: " + candidate);
+                    AddPrinterQueue(printerName, portName, candidate);
                     if (PrinterExists(printerName))
                     {
                         return;
@@ -377,14 +397,26 @@ namespace Printervention
             RunProcessWithOutput(GetSystemExecutablePath("rundll32.exe"), arguments, false);
         }
 
-        private static void RunPowerShell(string command, bool throwOnError)
+        private static void AddPrinterQueue(string printerName, string portName, string driverName)
         {
-            var powerShell = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.System),
-                "WindowsPowerShell",
-                "v1.0",
-                "powershell.exe");
-            RunProcessWithOutput(powerShell, "-NoProfile -NonInteractive -Command " + Quote(command), throwOnError);
+            var information = new PrinterInfo2
+            {
+                PrinterName = printerName,
+                PortName = portName,
+                DriverName = driverName,
+                PrintProcessor = "winprint",
+                DataType = "RAW",
+                Priority = 1,
+                DefaultPriority = 1
+            };
+
+            var handle = NativeAddPrinter(null, 2, ref information);
+            if (handle == IntPtr.Zero)
+            {
+                throw new Win32Exception(Marshal.GetLastWin32Error(), "Windows could not create the printer queue.");
+            }
+
+            NativeClosePrinter(handle);
         }
 
         private static string GetSystemExecutablePath(string fileName)
@@ -431,15 +463,43 @@ namespace Printervention
             return "\"" + value.Replace("\"", "\\\"") + "\"";
         }
 
-        private static string PsQuote(string value)
-        {
-            return "'" + value.Replace("'", "''") + "'";
-        }
-
         private static string EscapeWql(string value)
         {
             return value.Replace("\\", "\\\\").Replace("'", "\\'");
         }
+
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        private struct PrinterInfo2
+        {
+            public string ServerName;
+            public string PrinterName;
+            public string ShareName;
+            public string PortName;
+            public string DriverName;
+            public string Comment;
+            public string Location;
+            public IntPtr DevMode;
+            public string SeparatorFile;
+            public string PrintProcessor;
+            public string DataType;
+            public string Parameters;
+            public IntPtr SecurityDescriptor;
+            public uint Attributes;
+            public uint Priority;
+            public uint DefaultPriority;
+            public uint StartTime;
+            public uint UntilTime;
+            public uint Status;
+            public uint JobCount;
+            public uint AveragePagesPerMinute;
+        }
+
+        [DllImport("winspool.drv", EntryPoint = "AddPrinterW", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern IntPtr NativeAddPrinter(string serverName, uint level, ref PrinterInfo2 printerInformation);
+
+        [DllImport("winspool.drv", EntryPoint = "ClosePrinter", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool NativeClosePrinter(IntPtr printerHandle);
 
         private static bool IsLikelyPrinterDriverInf(string path)
         {

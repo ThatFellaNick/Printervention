@@ -29,6 +29,7 @@ namespace Printervention
         private TextBox _recommendationTextBox;
         private Button _discoverButton;
         private Button _openSupportButton;
+        private Button _stageDriverFolderButton;
         private Button _addToInstallListButton;
         private Button _refreshDriversButton;
         private Button _testPlanButton;
@@ -152,6 +153,8 @@ namespace Printervention
             var actionBar = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, FlowDirection = FlowDirection.LeftToRight };
             _openSupportButton = new Button { Text = "Open Model Driver Page", AutoSize = true, Margin = new Padding(0, 6, 8, 8) };
             _openSupportButton.Click += (sender, args) => OpenSupportPage();
+            _stageDriverFolderButton = new Button { Text = "Stage Extracted Driver Folder", AutoSize = true, Margin = new Padding(0, 6, 8, 8) };
+            _stageDriverFolderButton.Click += async (sender, args) => await StageExtractedDriverFolderAsync();
             _addToInstallListButton = new Button { Text = "Add to Install List", AutoSize = true, Margin = new Padding(0, 6, 8, 8) };
             _addToInstallListButton.Click += (sender, args) => AddCurrentPrinterToInstallList();
             _refreshDriversButton = new Button { Text = "Refresh Installed Drivers", AutoSize = true, Margin = new Padding(0, 6, 8, 8) };
@@ -159,6 +162,7 @@ namespace Printervention
             _testPlanButton = new Button { Text = "Test Plan", AutoSize = true, Margin = new Padding(0, 6, 8, 8) };
             _testPlanButton.Click += (sender, args) => TestPlan();
             actionBar.Controls.Add(_openSupportButton);
+            actionBar.Controls.Add(_stageDriverFolderButton);
             actionBar.Controls.Add(_addToInstallListButton);
             actionBar.Controls.Add(_refreshDriversButton);
             actionBar.Controls.Add(_testPlanButton);
@@ -664,6 +668,48 @@ namespace Printervention
             return driverName;
         }
 
+        private async Task StageExtractedDriverFolderAsync()
+        {
+            UpdateRecommendation();
+            if (_currentRecommendation == null || string.IsNullOrWhiteSpace(_modelTextBox.Text))
+            {
+                MessageBox.Show(this, "Find a printer or enter its model and brand first.", "Driver folder", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            using (var dialog = new FolderBrowserDialog
+            {
+                Description = "Choose the folder containing the vendor driver's extracted INF files.",
+                ShowNewFolderButton = false
+            })
+            {
+                if (dialog.ShowDialog(this) != DialogResult.OK)
+                {
+                    return;
+                }
+
+                SetBusy(true, "Staging the extracted driver folder...");
+                try
+                {
+                    var model = _modelTextBox.Text.Trim();
+                    var vendor = _currentRecommendation.Vendor;
+                    var result = await Task.Run(() => _installer.StageDriverFolder(dialog.SelectedPath, model, vendor));
+                    RefreshInstalledDrivers(model);
+                    SetStatus("Driver folder staged. Select the matching driver or add the printer to the install list.");
+                    MessageBox.Show(this, result, "Driver folder staged", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+                catch (Exception ex)
+                {
+                    SetStatus("Driver folder staging failed.");
+                    MessageBox.Show(this, ex.Message, "Driver staging failed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
+                finally
+                {
+                    SetBusy(false, null);
+                }
+            }
+        }
+
         private async Task<string> FindBestInstalledDriverAsync(PrinterInstallItem item)
         {
             var drivers = await Task.Run(() => _installer.GetInstalledPclDrivers(item.Model, item.Vendor));
@@ -892,6 +938,7 @@ namespace Printervention
         {
             _discoverButton.Enabled = !busy;
             _openSupportButton.Enabled = !busy;
+            _stageDriverFolderButton.Enabled = !busy;
             _addToInstallListButton.Enabled = !busy;
             _refreshDriversButton.Enabled = !busy;
             _testPlanButton.Enabled = !busy;

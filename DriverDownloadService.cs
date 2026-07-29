@@ -374,16 +374,17 @@ namespace Printervention
 
             if (extension == ".exe")
             {
-                if (TryExtractWithSevenZip(packagePath, extractFolder) ||
-                    TryExtractEmbeddedZip(packagePath, extractFolder) ||
-                    TryExtractSelfExtractor(packagePath, extractFolder))
+                if (TryExtractEmbeddedZip(packagePath, extractFolder))
                 {
                     return extractFolder;
                 }
+
+                throw new InvalidOperationException(
+                    "The official driver is packaged as an executable that cannot be safely unpacked as data. " +
+                    "Printervention will not run downloaded programs. Open the model driver page, extract or run the official package yourself, then use Stage Extracted Driver Folder.");
             }
 
-            File.Copy(packagePath, Path.Combine(extractFolder, Path.GetFileName(packagePath)), true);
-            return extractFolder;
+            throw new InvalidOperationException("The official driver package format is not supported for automatic extraction. Extract it manually, then use Stage Extracted Driver Folder.");
         }
 
         private static bool TryExtractEmbeddedZip(string packagePath, string extractFolder)
@@ -422,59 +423,6 @@ namespace Printervention
             catch
             {
                 // Not every vendor EXE contains a conventional ZIP overlay.
-            }
-
-            return false;
-        }
-
-        private static bool TryExtractWithSevenZip(string packagePath, string extractFolder)
-        {
-            var candidates = new[]
-            {
-                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "7-Zip", "7z.exe"),
-                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "7-Zip", "7z.exe")
-            };
-
-            var sevenZip = candidates.FirstOrDefault(File.Exists);
-            if (sevenZip == null)
-            {
-                return false;
-            }
-
-            try
-            {
-                PrinterInstaller.RunProcessWithOutput(sevenZip, "x " + Quote(packagePath) + " -o" + Quote(extractFolder) + " -y", true);
-                return Directory.EnumerateFiles(extractFolder, "*.inf", SearchOption.AllDirectories).Any();
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        private static bool TryExtractSelfExtractor(string packagePath, string extractFolder)
-        {
-            var attempts = new[]
-            {
-                "/extract:" + Quote(extractFolder) + " /quiet",
-                "/s /e /f " + Quote(extractFolder),
-                "-y -o" + Quote(extractFolder)
-            };
-
-            foreach (var arguments in attempts)
-            {
-                try
-                {
-                    PrinterInstaller.RunProcessWithOutput(packagePath, arguments, false);
-                    if (Directory.EnumerateFiles(extractFolder, "*.inf", SearchOption.AllDirectories).Any())
-                    {
-                        return true;
-                    }
-                }
-                catch
-                {
-                    // Self-extracting vendor packages use different switches; try the next common pattern.
-                }
             }
 
             return false;
