@@ -1,12 +1,13 @@
 /*
   Printervention
-  Vendor driver catalog and matching rules for non-v4 PCL driver guidance.
+  Vendor driver catalog and matching rules for non-v4 PCL and Kyocera KX guidance.
 */
 
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Text.RegularExpressions;
 
 namespace Printervention
 {
@@ -89,7 +90,10 @@ namespace Printervention
 
         public static bool IsCompatibleDriverName(string driverName, string preferredModel, string preferredVendor)
         {
-            return IsAllowedDriverName(driverName, preferredModel, IsCanonGenericPlusAllowed(preferredVendor)) &&
+            var isAllowed = IsAllowedDriverName(driverName, preferredModel, IsCanonGenericPlusAllowed(preferredVendor)) ||
+                IsAllowedKyoceraKxDriver(driverName, preferredModel, preferredVendor);
+
+            return isAllowed &&
                 !HasConflictingVendorFamily(driverName, preferredVendor);
         }
 
@@ -132,6 +136,28 @@ namespace Printervention
         private static bool IsCanonGenericPlusAllowed(string preferredVendor)
         {
             return string.Equals(preferredVendor, "Canon", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsAllowedKyoceraKxDriver(string driverName, string preferredModel, string preferredVendor)
+        {
+            if (!string.Equals(preferredVendor, "Kyocera", StringComparison.OrdinalIgnoreCase) ||
+                string.IsNullOrWhiteSpace(driverName))
+            {
+                return false;
+            }
+
+            var name = driverName.ToLowerInvariant();
+            if (!Regex.IsMatch(driverName, @"\bKX\b", RegexOptions.IgnoreCase) ||
+                name.Contains(" v4") || name.EndsWith("v4") || name.Contains("class driver") ||
+                name.Contains("universal") || name.Contains("classic") || name.Contains("generic") ||
+                name.Contains(" xps") || name.EndsWith("xps"))
+            {
+                return false;
+            }
+
+            // A KX package contains many models, so never accept one without an exact model term.
+            return HasPreferredModelTerms(preferredModel) &&
+                LooksLikeModelSpecificDriver(driverName, preferredModel);
         }
 
         public static bool IsVendorFamilyMatch(string preferredVendor, string driverName)

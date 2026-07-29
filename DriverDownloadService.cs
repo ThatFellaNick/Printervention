@@ -34,6 +34,12 @@ namespace Printervention
                 throw new InvalidOperationException("Automatic driver download needs a matched vendor first.");
             }
 
+            if (recommendation.Vendor.Equals("Kyocera", StringComparison.OrdinalIgnoreCase) &&
+                !DriverCatalog.HasPreferredModelTerms(recommendation.ModelQuery))
+            {
+                throw new InvalidOperationException("Kyocera KX requires the exact ECOSYS or TASKalfa model. Enter the model shown on the printer or its web page, then run install again.");
+            }
+
             var packageUrl = FindDriverPackageUrl(recommendation);
             var workingFolder = CreateWorkingFolder(recommendation);
             var packagePath = DownloadPackage(packageUrl, workingFolder);
@@ -51,6 +57,12 @@ namespace Printervention
                 return "https://downloads.canon.com/sss2026/drivers/Generic_Plus_PCL6_v3.40.zip";
             }
 
+            if (recommendation.Vendor.Equals("Kyocera", StringComparison.OrdinalIgnoreCase))
+            {
+                // Kyocera distributes model-specific KX registrations in one signed, official package.
+                return "https://www.kyoceradocumentsolutions.us/content/dam/download-center-americas-cf/us/drivers/drivers/KX_Print_Driver_zip.download.zip";
+            }
+
             using (var client = CreateWebClient())
             {
                 var html = client.DownloadString(recommendation.SupportUrl);
@@ -66,7 +78,7 @@ namespace Printervention
 
                 if (preferred == null)
                 {
-                    throw new InvalidOperationException("I could not find a model-specific PCL/PCL6 download link on the official vendor page. Use the browser page to download it, then choose the extracted folder.");
+                    throw new InvalidOperationException("I could not find a model-specific PCL/PCL6 or Kyocera KX download link on the official vendor page. Use the browser page to download it, then choose the extracted folder.");
                 }
 
                 return preferred.Url;

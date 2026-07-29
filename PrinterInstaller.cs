@@ -12,6 +12,7 @@ using System.Linq;
 using System.Management;
 using System.Net;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace Printervention
 {
@@ -129,7 +130,7 @@ namespace Printervention
             var normalizedDriverName = NormalizeDriverName(driverName);
             if (!DriverCatalog.IsCompatibleDriverName(normalizedDriverName, preferredModel, preferredVendor))
             {
-                throw new InvalidOperationException("Choose an installed model-specific PCL/PCL6 driver for this printer brand and model that is not universal and not v4. If the dropdown is empty, use Install Driver and Print Object first.");
+                throw new InvalidOperationException("Choose an installed model-specific PCL/PCL6 or Kyocera KX driver for this printer brand and model that is not universal and not v4. If the dropdown is empty, use Install Driver and Print Object first.");
             }
 
             var portName = "IP_" + parsedIp;
@@ -447,14 +448,16 @@ namespace Printervention
         private static bool IsLikelyPrinterDriverInf(string path)
         {
             var fileName = Path.GetFileName(path);
-            if (fileName.Equals("oemsetup.inf", StringComparison.OrdinalIgnoreCase) ||
-                fileName.Equals("setup.inf", StringComparison.OrdinalIgnoreCase) ||
-                fileName.IndexOf("uninstall", StringComparison.OrdinalIgnoreCase) >= 0)
+            if (fileName.IndexOf("uninstall", StringComparison.OrdinalIgnoreCase) >= 0)
             {
                 return false;
             }
 
-            return true;
+            // Vendor bundles also contain setup and USB utility INFs. A real Type 3 print INF
+            // declares the Printer class and a manufacturer section, including Kyocera OEMSETUP.INF.
+            var header = File.ReadLines(path).Take(500).ToArray();
+            return header.Any(line => line.Trim().Equals("[Manufacturer]", StringComparison.OrdinalIgnoreCase)) &&
+                header.Any(line => Regex.IsMatch(line, @"^\s*Class\s*=\s*Printer\s*$", RegexOptions.IgnoreCase));
         }
 
         private static bool IsNativeArchitectureInf(string path)
@@ -468,6 +471,20 @@ namespace Printervention
                 segment.Equals("x86", StringComparison.OrdinalIgnoreCase) ||
                 segment.Equals("i386", StringComparison.OrdinalIgnoreCase) ||
                 segment.Equals("32bit", StringComparison.OrdinalIgnoreCase));
+            var hasArm64Folder = segments.Any(segment =>
+                segment.Equals("arm64", StringComparison.OrdinalIgnoreCase) ||
+                segment.Equals("aarch64", StringComparison.OrdinalIgnoreCase));
+            var isArm64OperatingSystem = IsArm64OperatingSystem();
+
+            if (hasArm64Folder && !isArm64OperatingSystem)
+            {
+                return false;
+            }
+
+            if (isArm64OperatingSystem && (has64BitFolder || has32BitFolder) && !hasArm64Folder)
+            {
+                return false;
+            }
 
             if (Environment.Is64BitOperatingSystem && has32BitFolder && !has64BitFolder)
             {
@@ -483,13 +500,19 @@ namespace Printervention
             var architectureLines = File.ReadLines(path).Take(500).ToArray();
             var targetsAmd64 = architectureLines.Any(line => line.IndexOf("NTamd64", StringComparison.OrdinalIgnoreCase) >= 0);
             var targetsX86 = architectureLines.Any(line => line.IndexOf("NTx86", StringComparison.OrdinalIgnoreCase) >= 0);
+            var targetsArm64 = architectureLines.Any(line => line.IndexOf("NTarm64", StringComparison.OrdinalIgnoreCase) >= 0);
+
+            if (isArm64OperatingSystem)
+            {
+                return targetsArm64 || (!targetsAmd64 && !targetsX86);
+            }
 
             if (Environment.Is64BitOperatingSystem)
             {
-                return targetsAmd64 || !targetsX86;
+                return targetsAmd64 || (!targetsX86 && !targetsArm64);
             }
 
-            return targetsX86 || !targetsAmd64;
+            return targetsX86 || (!targetsAmd64 && !targetsArm64);
         }
 
         private static string NormalizeDriverName(string driverName)
@@ -620,12 +643,21 @@ namespace Printervention
 
         private static string TryRegisterPrintDriver(string infFile, string driverName)
         {
-            var architecture = Environment.Is64BitOperatingSystem ? "x64" : "Intel";
+            var architecture = IsArm64OperatingSystem()
+                ? "ARM64"
+                : Environment.Is64BitOperatingSystem ? "x64" : "Intel";
             var arguments = "printui.dll,PrintUIEntry /ia /m " + Quote(driverName) +
                 " /h " + Quote(architecture) +
                 " /v " + Quote("Type 3 - User Mode") +
                 " /f " + Quote(infFile);
             return RunProcessWithOutput("rundll32.exe", arguments, false);
+        }
+
+        private static bool IsArm64OperatingSystem()
+        {
+            var processorArchitecture = Environment.GetEnvironmentVariable("PROCESSOR_ARCHITEW6432") ??
+                Environment.GetEnvironmentVariable("PROCESSOR_ARCHITECTURE") ?? string.Empty;
+            return processorArchitecture.Equals("ARM64", StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool IsPrintDriverRegistrationSuccess(string output)

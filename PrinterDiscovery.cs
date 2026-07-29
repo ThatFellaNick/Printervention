@@ -29,13 +29,15 @@ namespace Printervention
             }
 
             var identity = await QuerySnmpAsync(parsed).ConfigureAwait(false);
-            if (identity.HasUsefulName)
+            if (identity.HasSpecificModel)
             {
                 return identity;
             }
 
             var httpIdentity = await QueryHttpAsync(parsed).ConfigureAwait(false);
-            return httpIdentity.HasUsefulName ? httpIdentity : identity;
+            return httpIdentity.HasUsefulName && IsBetterModel(httpIdentity.Model, identity.Model)
+                ? httpIdentity
+                : identity;
         }
 
         private static async Task<PrinterIdentity> QuerySnmpAsync(IPAddress ipAddress)
@@ -333,6 +335,17 @@ namespace Printervention
         public bool HasUsefulName
         {
             get { return !string.IsNullOrWhiteSpace(Model); }
+        }
+
+        public bool HasSpecificModel
+        {
+            get
+            {
+                return HasUsefulName &&
+                    Regex.IsMatch(Model, @"\b([A-Z]{1,8}[- ]?\d{3,5}[A-Z0-9]*|\d{3,5}[A-Z]{1,5})\b", RegexOptions.IgnoreCase) &&
+                    Model.IndexOf("Printing System", StringComparison.OrdinalIgnoreCase) < 0 &&
+                    Model.IndexOf("Document Solutions", StringComparison.OrdinalIgnoreCase) < 0;
+            }
         }
     }
 }

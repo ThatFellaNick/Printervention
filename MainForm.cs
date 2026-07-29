@@ -262,14 +262,14 @@ namespace Printervention
                 if (_installedDriverComboBox.Items.Count > 0)
                 {
                     SelectPreferredDriver(preferredModel, Convert.ToString(_vendorComboBox.SelectedItem));
-                    SetStatus("Found " + _installedDriverComboBox.Items.Count + " installed model-specific non-v4 PCL driver(s).");
+                    SetStatus("Found " + _installedDriverComboBox.Items.Count + " installed model-specific non-v4 PCL/KX driver(s).");
                 }
                 else
                 {
                     var modelContext = DriverCatalog.HasPreferredModelTerms(preferredModel)
                         ? " matching " + preferredModel.Trim()
                         : string.Empty;
-                    SetStatus("No installed model-specific non-v4 PCL drivers" + modelContext + " were found. Use Install Driver and Print Object first.");
+                    SetStatus("No installed model-specific non-v4 PCL/KX drivers" + modelContext + " were found. Use Install Driver and Print Object first.");
                 }
             }
             catch (Exception ex)
@@ -341,7 +341,7 @@ namespace Printervention
                 "Official driver page: " + _currentRecommendation.SupportUrl + Environment.NewLine + Environment.NewLine +
                 "Authorized vendor domains: " + _currentRecommendation.AuthorizedDomainDisplay + Environment.NewLine + Environment.NewLine +
                 "Rules:" + Environment.NewLine +
-                "- Use PCL or PCL6 only." + Environment.NewLine +
+                "- Use PCL/PCL6, or an exact-model Kyocera KX driver." + Environment.NewLine +
                 "- Prefer model-specific drivers; Canon Generic Plus PCL6 is allowed when Canon offers no model-specific PCL package." + Environment.NewLine +
                 "- Avoid all other universal, global, and generic drivers." + Environment.NewLine +
                 "- Do not use PCL v4, class drivers, IPP class drivers, or vendor app-only packages." + Environment.NewLine +
@@ -395,7 +395,7 @@ namespace Printervention
                 this,
                 "I could not finish the driver install automatically." + Environment.NewLine + Environment.NewLine +
                 reason + Environment.NewLine + Environment.NewLine +
-                "Download the model-specific PCL/PCL6 driver from the official page, extract it if needed, then click OK to choose the extracted driver folder.",
+                "Download the model-specific PCL/PCL6 or Kyocera KX driver from the official page, extract it if needed, then click OK to choose the extracted driver folder.",
                 "Manual driver install",
                 MessageBoxButtons.OKCancel,
                 MessageBoxIcon.Information);
@@ -556,7 +556,7 @@ namespace Printervention
             var usingRecommendationPlaceholder = string.Equals(driverName, _currentRecommendation.RecommendedDriver, StringComparison.OrdinalIgnoreCase);
             if (!DriverCatalog.IsCompatibleDriverName(driverName, usingRecommendationPlaceholder ? null : _modelTextBox.Text, GetPreferredVendor()))
             {
-                throw new InvalidOperationException("The selected or recommended driver is not a model-specific non-v4 PCL/PCL6 driver for this printer brand and model.");
+                throw new InvalidOperationException("The selected or recommended driver is not a model-specific non-v4 PCL/PCL6 or Kyocera KX driver for this printer brand and model.");
             }
 
             if (_currentRecommendation.IsKnownVendor && !_currentRecommendation.IsAuthorizedUrl(_currentRecommendation.SupportUrl))
