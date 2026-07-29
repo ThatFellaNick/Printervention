@@ -426,6 +426,11 @@ namespace Printervention
 
         public static string RunProcessWithOutput(string fileName, string arguments, bool throwOnError)
         {
+            return RunProcessWithOutput(fileName, arguments, throwOnError, 0);
+        }
+
+        public static string RunProcessWithOutput(string fileName, string arguments, bool throwOnError, int timeoutMilliseconds)
+        {
             var output = new StringBuilder();
             var process = new Process
             {
@@ -445,6 +450,13 @@ namespace Printervention
             process.Start();
             process.BeginOutputReadLine();
             process.BeginErrorReadLine();
+            if (timeoutMilliseconds > 0 && !process.WaitForExit(timeoutMilliseconds))
+            {
+                process.Kill();
+                process.WaitForExit();
+                throw new TimeoutException("The approved vendor package did not finish extracting within two minutes.");
+            }
+
             process.WaitForExit();
 
             var text = output.ToString().Trim();

@@ -31,7 +31,7 @@ Download the current portable Windows executable from [GitHub Releases](https://
 - Tracks driver resolution, queue creation, success, and failure separately for every printer so one failure does not stop the remaining installs.
 - Lets operators load a selected row back into the entry fields for correction and retry.
 - The `Install All` flow tries automatic official download, safe archive extraction, driver staging, and Windows queue creation for each pending row.
-- Downloaded vendor executables are never launched. ZIP/CAB packages and embedded ZIP data can be handled automatically; other vendor EXEs must be extracted or run by the operator, then loaded with **Stage Extracted Driver Folder**.
+- ZIP/CAB packages and embedded ZIP data are extracted directly. A vendor EXE can run only after Windows validates its Authenticode signature and the certificate publisher matches the selected manufacturer or approved parent brand. Unsupported extractors can be handled with **Stage Extracted Driver Folder**.
 - Driver staging tolerates partial package failures when at least one printer INF is added successfully.
 - Driver staging selects the native Windows architecture and registers duplicate INF driver names only once.
 - After staging, Printervention attempts to register the matching Windows print driver from the INF before creating the queue.
@@ -43,7 +43,7 @@ Download the current portable Windows executable from [GitHub Releases](https://
 
 ## Antivirus and signing
 
-Printervention is intentionally transparent about behaviors that security products inspect closely: it downloads driver packages from cataloged vendor domains, extracts supported archives as data, stages signed printer INFs with Windows `pnputil`, and creates print queues through the Windows spooler API. It never executes a downloaded package. The source code and authorized-domain catalog are included in this repository.
+Printervention is intentionally transparent about behaviors that security products inspect closely: it downloads driver packages from cataloged vendor domains, extracts supported archives, stages signed printer INFs with Windows `pnputil`, and creates print queues through the Windows spooler API. Downloaded vendor executables require a valid Windows Authenticode verdict and an approved manufacturer-specific publisher match before quiet extraction. The source code, authorized-domain catalog, and publisher allowlist are included in this repository.
 
 Release executables should be signed consistently with a trusted code-signing identity and timestamped. Unsigned builds receive no transferable publisher reputation, so every changed file hash can initially be treated as unknown by Microsoft Defender SmartScreen or antivirus machine-learning systems. A self-signed certificate does not provide public reputation.
 

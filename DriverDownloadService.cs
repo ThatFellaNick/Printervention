@@ -43,7 +43,7 @@ namespace Printervention
             var packageUrl = FindDriverPackageUrl(recommendation);
             var workingFolder = CreateWorkingFolder(recommendation);
             var packagePath = DownloadPackage(packageUrl, workingFolder);
-            var extractedFolder = ExtractPackage(packagePath, workingFolder);
+            var extractedFolder = ExtractPackage(packagePath, workingFolder, recommendation.Vendor);
             var stageOutput = _installer.StageDriverFolder(extractedFolder, recommendation.ModelQuery, recommendation.Vendor);
 
             return new DriverInstallResult(packageUrl, packagePath, extractedFolder, stageOutput);
@@ -354,7 +354,7 @@ namespace Printervention
             return packagePath;
         }
 
-        private static string ExtractPackage(string packagePath, string workingFolder)
+        private static string ExtractPackage(string packagePath, string workingFolder, string vendor)
         {
             var extractFolder = Path.Combine(workingFolder, "extracted");
             Directory.CreateDirectory(extractFolder);
@@ -379,9 +379,15 @@ namespace Printervention
                     return extractFolder;
                 }
 
+                AuthenticodeVerifier.VerifyApprovedVendorExecutable(packagePath, vendor);
+                if (TryExtractSignedVendorExecutable(packagePath, extractFolder))
+                {
+                    return extractFolder;
+                }
+
                 throw new InvalidOperationException(
-                    "The official driver is packaged as an executable that cannot be safely unpacked as data. " +
-                    "Printervention will not run downloaded programs. Open the model driver page, extract or run the official package yourself, then use Stage Extracted Driver Folder.");
+                    "The official driver executable has a valid approved publisher, but its extraction format is not supported. " +
+                    "Open the model driver page, extract or run the official package yourself, then use Stage Extracted Driver Folder.");
             }
 
             throw new InvalidOperationException("The official driver package format is not supported for automatic extraction. Extract it manually, then use Stage Extracted Driver Folder.");
@@ -423,6 +429,34 @@ namespace Printervention
             catch
             {
                 // Not every vendor EXE contains a conventional ZIP overlay.
+            }
+
+            return false;
+        }
+
+        private static bool TryExtractSignedVendorExecutable(string packagePath, string extractFolder)
+        {
+            var attempts = new[]
+            {
+                "/extract:" + Quote(extractFolder) + " /quiet",
+                "/s /e /f " + Quote(extractFolder),
+                "-y -o" + Quote(extractFolder)
+            };
+
+            foreach (var arguments in attempts)
+            {
+                try
+                {
+                    PrinterInstaller.RunProcessWithOutput(packagePath, arguments, false, 120000);
+                    if (Directory.EnumerateFiles(extractFolder, "*.inf", SearchOption.AllDirectories).Any())
+                    {
+                        return true;
+                    }
+                }
+                catch
+                {
+                    // Approved vendors use different self-extractor formats; try the next quiet extraction pattern.
+                }
             }
 
             return false;
