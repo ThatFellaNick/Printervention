@@ -9,6 +9,9 @@
     <UseWindowsForms>true</UseWindowsForms>
     <RootNamespace>Printervention</RootNamespace>
     <AssemblyName>Printervention</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Company>Printervention</Company>
+    <Description>Official-vendor printer driver and Windows print queue installer</Description>
     <Platforms>AnyCPU</Platforms>
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>

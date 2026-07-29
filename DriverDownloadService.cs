@@ -482,7 +482,8 @@ namespace Printervention
 
         private static void RunExpand(string packagePath, string extractFolder)
         {
-            PrinterInstaller.RunProcessWithOutput("expand.exe", Quote(packagePath) + " -F:* " + Quote(extractFolder), true);
+            var expand = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "expand.exe");
+            PrinterInstaller.RunProcessWithOutput(expand, Quote(packagePath) + " -F:* " + Quote(extractFolder), true);
         }
 
         private static string CreateWorkingFolder(DriverRecommendation recommendation)

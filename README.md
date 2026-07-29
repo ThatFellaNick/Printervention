@@ -7,7 +7,7 @@ The first version targets .NET Framework 4.8 so it can run on commonly managed W
 ## Current behavior
 
 - Discovers printer identity by SNMP first, then HTTP as a fallback.
-- Prompts to relaunch as administrator when not already elevated or running as `SYSTEM`.
+- Uses the standard Windows application manifest to request administrator rights before startup; ScreenConnect `SYSTEM` sessions already satisfy this requirement.
 - Updates app-suggested queue names when a new printer is discovered.
 - Defaults the queue name to the detected or entered model while preserving any custom queue name the user enters.
 - Supports the requested major printer brands with a driver catalog.
@@ -30,6 +30,15 @@ The first version targets .NET Framework 4.8 so it can run on commonly managed W
 - Includes a Test Plan button for no-printer validation.
 - Attempts to default the queue to black-and-white and one-sided printing.
 - Disables Canon's separate Auto Color Detection setting so Canon preferences show `Black and White` rather than `Auto [Color/B&W]`.
+- Uses fully qualified Windows system-tool paths and avoids PowerShell execution-policy overrides.
+
+## Antivirus and signing
+
+Printervention is intentionally transparent about behaviors that security products inspect closely: it downloads driver packages from cataloged vendor domains, extracts them, stages signed printer INFs with Windows `pnputil`, and creates print queues. The source code and authorized-domain catalog are included in this repository.
+
+Release executables should be signed consistently with a trusted code-signing identity and timestamped. Unsigned builds receive no transferable publisher reputation, so every changed file hash can initially be treated as unknown by Microsoft Defender SmartScreen or antivirus machine-learning systems. A self-signed certificate does not provide public reputation.
+
+If Microsoft Defender Antivirus incorrectly detects a release, submit that exact executable through the [Microsoft Security Intelligence file submission portal](https://www.microsoft.com/en-us/wdsi/filesubmission) as a software developer and classify it as incorrectly detected. Do not work around a detection by adding broad Defender exclusions.
 
 Driver package installation still depends on vendor-provided packages or drivers already staged/installed in Windows. Many vendor downloads require model-specific pages, EULAs, or package extraction, so the app intentionally follows official vendor locations instead of scraping arbitrary installers. URLs are checked against the vendor allowlist. Canon Generic Plus PCL6 and HP Universal Printing PCL 6 are narrow vendor-approved fallbacks; other universal, global, and generic packages remain blocked. Kyocera's official KX package is supported only for the exact model registration.
 

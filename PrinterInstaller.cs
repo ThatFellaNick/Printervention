@@ -79,7 +79,7 @@ namespace Printervention
             var result = new DriverStagingSummary();
             foreach (var infFile in infFiles)
             {
-                var output = RunProcessWithOutput("pnputil.exe", "/add-driver " + Quote(infFile) + " /install", false);
+                var output = RunProcessWithOutput(GetSystemExecutablePath("pnputil.exe"), "/add-driver " + Quote(infFile) + " /install", false);
                 if (IsSuccessfulPnPOutput(output))
                 {
                     result.AddSuccess(infFile, output);
@@ -139,11 +139,6 @@ namespace Printervention
 
             CreatePrinterQueueWithFallbacks(printerName.Trim(), portName, normalizedDriverName);
             ApplyPrinterDefaults(printerName.Trim());
-        }
-
-        public void OpenWindowsPrinterSettings()
-        {
-            Process.Start(new ProcessStartInfo("control.exe", "printers") { UseShellExecute = true });
         }
 
         private static void EnsureTcpIpPort(string portName, string ipAddress)
@@ -352,15 +347,6 @@ namespace Printervention
         {
             var names = new List<string>();
 
-            var powerShellOutput = RunProcessWithOutput("powershell.exe", "-NoProfile -ExecutionPolicy Bypass -Command " + Quote("Get-PrinterDriver | Select-Object -ExpandProperty Name"), false);
-            foreach (var line in SplitLines(powerShellOutput))
-            {
-                if (DriverCatalog.IsAllowedDriverName(line))
-                {
-                    names.Add(line.Trim());
-                }
-            }
-
             using (var searcher = new ManagementObjectSearcher("SELECT Name FROM Win32_PrinterDriver"))
             {
                 foreach (ManagementObject driver in searcher.Get())
@@ -388,12 +374,22 @@ namespace Printervention
                 arguments += " /f " + Quote(inboxInf);
             }
 
-            RunProcessWithOutput("rundll32.exe", arguments, false);
+            RunProcessWithOutput(GetSystemExecutablePath("rundll32.exe"), arguments, false);
         }
 
         private static void RunPowerShell(string command, bool throwOnError)
         {
-            RunProcessWithOutput("powershell.exe", "-NoProfile -Command " + Quote(command), throwOnError);
+            var powerShell = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.System),
+                "WindowsPowerShell",
+                "v1.0",
+                "powershell.exe");
+            RunProcessWithOutput(powerShell, "-NoProfile -NonInteractive -Command " + Quote(command), throwOnError);
+        }
+
+        private static string GetSystemExecutablePath(string fileName)
+        {
+            return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), fileName);
         }
 
         public static string RunProcessWithOutput(string fileName, string arguments, bool throwOnError)
@@ -650,7 +646,7 @@ namespace Printervention
                 " /h " + Quote(architecture) +
                 " /v " + Quote("Type 3 - User Mode") +
                 " /f " + Quote(infFile);
-            return RunProcessWithOutput("rundll32.exe", arguments, false);
+            return RunProcessWithOutput(GetSystemExecutablePath("rundll32.exe"), arguments, false);
         }
 
         private static bool IsArm64OperatingSystem()
