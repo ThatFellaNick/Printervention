@@ -4,6 +4,7 @@
 */
 
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using System.Net;
@@ -28,9 +29,14 @@ namespace Printervention
         private TextBox _recommendationTextBox;
         private Button _discoverButton;
         private Button _openSupportButton;
-        private Button _installDriverButton;
+        private Button _addToInstallListButton;
         private Button _refreshDriversButton;
         private Button _testPlanButton;
+        private Button _installAllButton;
+        private Button _loadSelectedButton;
+        private Button _removeSelectedButton;
+        private Button _clearListButton;
+        private DataGridView _installListGrid;
         private DriverRecommendation _currentRecommendation;
         private bool _settingSuggestedQueueName;
         private string _lastSuggestedQueueName;
@@ -39,7 +45,8 @@ namespace Printervention
         {
             _downloadService = new DriverDownloadService(_installer);
             Text = "Printervention";
-            MinimumSize = new Size(780, 560);
+            MinimumSize = new Size(900, 650);
+            ClientSize = new Size(1080, 720);
             StartPosition = FormStartPosition.CenterScreen;
             Font = new Font("Segoe UI", 9F);
             BuildInterface();
@@ -55,12 +62,14 @@ namespace Printervention
                 Dock = DockStyle.Fill,
                 Padding = new Padding(16),
                 ColumnCount = 1,
-                RowCount = 5
+                RowCount = 7
             };
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            root.RowStyles.Add(new RowStyle(SizeType.Percent, 62));
+            root.RowStyles.Add(new RowStyle(SizeType.Percent, 38));
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             Controls.Add(root);
 
@@ -123,17 +132,67 @@ namespace Printervention
             var actionBar = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, FlowDirection = FlowDirection.LeftToRight };
             _openSupportButton = new Button { Text = "Open Model Driver Page", AutoSize = true, Margin = new Padding(0, 6, 8, 8) };
             _openSupportButton.Click += (sender, args) => OpenSupportPage();
-            _installDriverButton = new Button { Text = "Install Driver and Print Object", AutoSize = true, Margin = new Padding(0, 6, 8, 8) };
-            _installDriverButton.Click += (sender, args) => InstallDriverAndPrintObject();
+            _addToInstallListButton = new Button { Text = "Add to Install List", AutoSize = true, Margin = new Padding(0, 6, 8, 8) };
+            _addToInstallListButton.Click += (sender, args) => AddCurrentPrinterToInstallList();
             _refreshDriversButton = new Button { Text = "Refresh Installed Drivers", AutoSize = true, Margin = new Padding(0, 6, 8, 8) };
             _refreshDriversButton.Click += (sender, args) => RefreshInstalledDrivers();
             _testPlanButton = new Button { Text = "Test Plan", AutoSize = true, Margin = new Padding(0, 6, 8, 8) };
             _testPlanButton.Click += (sender, args) => TestPlan();
             actionBar.Controls.Add(_openSupportButton);
-            actionBar.Controls.Add(_installDriverButton);
+            actionBar.Controls.Add(_addToInstallListButton);
             actionBar.Controls.Add(_refreshDriversButton);
             actionBar.Controls.Add(_testPlanButton);
             root.Controls.Add(actionBar);
+
+            var listBar = new TableLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                AutoSize = true,
+                ColumnCount = 2,
+                Margin = new Padding(0, 4, 0, 0)
+            };
+            listBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            listBar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            listBar.Controls.Add(new Label
+            {
+                Text = "Install List",
+                AutoSize = true,
+                Anchor = AnchorStyles.Left,
+                Font = new Font(Font, FontStyle.Bold),
+                Margin = new Padding(0, 8, 0, 4)
+            }, 0, 0);
+
+            var listActions = new FlowLayoutPanel
+            {
+                AutoSize = true,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false,
+                Anchor = AnchorStyles.Right
+            };
+            _installAllButton = new Button { Text = "Install All", AutoSize = true, Margin = new Padding(8, 2, 0, 4) };
+            _installAllButton.Click += async (sender, args) => await InstallAllAsync();
+            _loadSelectedButton = new Button { Text = "Load Selected", AutoSize = true, Margin = new Padding(8, 2, 0, 4) };
+            _loadSelectedButton.Click += (sender, args) => LoadSelectedInstallItem();
+            _removeSelectedButton = new Button { Text = "Remove Selected", AutoSize = true, Margin = new Padding(8, 2, 0, 4) };
+            _removeSelectedButton.Click += (sender, args) => RemoveSelectedInstallItems();
+            _clearListButton = new Button { Text = "Clear List", AutoSize = true, Margin = new Padding(8, 2, 0, 4) };
+            _clearListButton.Click += (sender, args) => ClearInstallList();
+            listActions.Controls.Add(_installAllButton);
+            listActions.Controls.Add(_loadSelectedButton);
+            listActions.Controls.Add(_removeSelectedButton);
+            listActions.Controls.Add(_clearListButton);
+            listBar.Controls.Add(listActions, 1, 0);
+            root.Controls.Add(listBar);
+
+            _installListGrid = BuildInstallListGrid();
+            _installListGrid.CellDoubleClick += (sender, args) =>
+            {
+                if (args.RowIndex >= 0)
+                {
+                    LoadSelectedInstallItem();
+                }
+            };
+            root.Controls.Add(_installListGrid);
 
             _recommendationTextBox = new TextBox
             {
@@ -162,6 +221,44 @@ namespace Printervention
             var textBox = new TextBox { Dock = DockStyle.Fill, Margin = new Padding(0, 2, 8, 8) };
             grid.Controls.Add(textBox, column + 1, row);
             return textBox;
+        }
+
+        private static DataGridView BuildInstallListGrid()
+        {
+            var grid = new DataGridView
+            {
+                Dock = DockStyle.Fill,
+                AllowUserToAddRows = false,
+                AllowUserToDeleteRows = false,
+                AllowUserToResizeRows = false,
+                AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
+                BackgroundColor = SystemColors.Window,
+                BorderStyle = BorderStyle.Fixed3D,
+                MultiSelect = true,
+                ReadOnly = true,
+                RowHeadersVisible = false,
+                SelectionMode = DataGridViewSelectionMode.FullRowSelect,
+                Margin = new Padding(0, 0, 0, 4)
+            };
+
+            grid.Columns.Add(CreateInstallColumn("IP Address", 14));
+            grid.Columns.Add(CreateInstallColumn("Model", 23));
+            grid.Columns.Add(CreateInstallColumn("Brand", 11));
+            grid.Columns.Add(CreateInstallColumn("Queue Name", 22));
+            grid.Columns.Add(CreateInstallColumn("Driver", 25));
+            grid.Columns.Add(CreateInstallColumn("Status", 13));
+            grid.Columns.Add(CreateInstallColumn("Details", 28));
+            return grid;
+        }
+
+        private static DataGridViewTextBoxColumn CreateInstallColumn(string heading, float fillWeight)
+        {
+            return new DataGridViewTextBoxColumn
+            {
+                HeaderText = heading,
+                FillWeight = fillWeight,
+                SortMode = DataGridViewColumnSortMode.NotSortable
+            };
         }
 
         private void LoadVendors()
@@ -269,7 +366,7 @@ namespace Printervention
                     var modelContext = DriverCatalog.HasPreferredModelTerms(preferredModel)
                         ? " matching " + preferredModel.Trim()
                         : string.Empty;
-                    SetStatus("No approved installed non-v4 PCL/KX drivers" + modelContext + " were found. Use Install Driver and Print Object first.");
+                    SetStatus("No approved installed non-v4 PCL/KX drivers" + modelContext + " were found. Add the printer to the install list to stage one automatically.");
                 }
             }
             catch (Exception ex)
@@ -280,10 +377,7 @@ namespace Printervention
 
         private void SelectPreferredDriver(string preferredModel, string preferredVendor)
         {
-            var preferredTerms = (preferredModel ?? string.Empty)
-                .Split(new[] { ' ', '-', '_' }, StringSplitOptions.RemoveEmptyEntries)
-                .Where(term => term.Any(char.IsDigit))
-                .ToArray();
+            var preferredTerms = GetPreferredModelTerms(preferredModel);
 
             var bestIndex = 0;
             var bestScore = int.MinValue;
@@ -299,6 +393,14 @@ namespace Printervention
             }
 
             _installedDriverComboBox.SelectedIndex = bestIndex;
+        }
+
+        private static string[] GetPreferredModelTerms(string preferredModel)
+        {
+            return (preferredModel ?? string.Empty)
+                .Split(new[] { ' ', '-', '_' }, StringSplitOptions.RemoveEmptyEntries)
+                .Where(term => term.Any(char.IsDigit))
+                .ToArray();
         }
 
         private static int ScoreInstalledDriver(string driverName, string[] preferredTerms, string preferredVendor)
@@ -347,7 +449,7 @@ namespace Printervention
                 "- Avoid all other universal, global, and generic drivers." + Environment.NewLine +
                 "- Do not use PCL v4, class drivers, IPP class drivers, or vendor app-only packages." + Environment.NewLine +
                 "- Download installers only from the authorized vendor domains shown above." + Environment.NewLine +
-                "- Use Install Driver and Print Object to stage the driver and create the Windows queue." + Environment.NewLine +
+                "- Add each discovered printer to the install list, then use Install All." + Environment.NewLine +
                 "- Use Test Plan when you do not have a printer connected." + Environment.NewLine +
                 "- After queue creation, Printervention attempts to set black-and-white and one-sided defaults." + Environment.NewLine + Environment.NewLine +
                 _currentRecommendation.Notes;
@@ -367,82 +469,6 @@ namespace Printervention
             }
         }
 
-        private bool InstallDriverWorkflow(bool allowManualFallback)
-        {
-            SetBusy(true, "Trying automatic driver install...");
-            try
-            {
-                _downloadService.InstallFromRecommendation(_currentRecommendation);
-                RefreshInstalledDrivers(_modelTextBox.Text);
-                SetStatus("Driver installed automatically.");
-                return _installedDriverComboBox.Items.Count > 0;
-            }
-            catch (Exception ex)
-            {
-                SetStatus("Automatic install needs help: " + ex.Message);
-                return allowManualFallback && PromptManualDriverInstall(ex.Message);
-            }
-            finally
-            {
-                SetBusy(false, null);
-            }
-        }
-
-        private bool PromptManualDriverInstall(string reason)
-        {
-            CopyModelSearchText();
-            _currentRecommendation.OpenSupportPage();
-            var response = MessageBox.Show(
-                this,
-                "I could not finish the driver install automatically." + Environment.NewLine + Environment.NewLine +
-                reason + Environment.NewLine + Environment.NewLine +
-                "Download the model-specific PCL/PCL6 or Kyocera KX driver from the official page, extract it if needed, then click OK to choose the extracted driver folder.",
-                "Manual driver install",
-                MessageBoxButtons.OKCancel,
-                MessageBoxIcon.Information);
-
-            if (response == DialogResult.OK)
-            {
-                return StageDriverFolder();
-            }
-
-            return false;
-        }
-
-        private bool StageDriverFolder()
-        {
-            using (var dialog = new FolderBrowserDialog())
-            {
-                dialog.Description = "Choose the extracted vendor driver folder that contains INF files.";
-                dialog.ShowNewFolderButton = false;
-
-                if (dialog.ShowDialog(this) != DialogResult.OK)
-                {
-                    return false;
-                }
-
-                SetBusy(true, "Staging driver files...");
-                try
-                {
-                    var result = _installer.StageDriverFolder(dialog.SelectedPath, _modelTextBox.Text, _currentRecommendation.Vendor);
-                    RefreshInstalledDrivers(_modelTextBox.Text);
-                    SetStatus("Driver installed.");
-                    MessageBox.Show(this, string.IsNullOrWhiteSpace(result) ? "Driver installed." : result, "Driver install finished", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    return _installedDriverComboBox.Items.Count > 0;
-                }
-                catch (Exception ex)
-                {
-                    SetStatus(ex.Message);
-                    MessageBox.Show(this, ex.Message, "Driver staging failed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    return false;
-                }
-                finally
-                {
-                    SetBusy(false, null);
-                }
-            }
-        }
-
         private void CopyModelSearchText()
         {
             if (!string.IsNullOrWhiteSpace(_currentRecommendation.ModelQuery))
@@ -452,52 +478,315 @@ namespace Printervention
             }
         }
 
-        private void InstallDriverAndPrintObject()
+        private void AddCurrentPrinterToInstallList()
         {
-            try
+            IPAddress parsedAddress;
+            if (!IPAddress.TryParse(_ipAddressTextBox.Text.Trim(), out parsedAddress))
             {
-                if (_installedDriverComboBox.SelectedItem == null)
-                {
-                    InstallDriverWorkflow(true);
-                }
+                ShowListValidation("Enter a valid printer IP address before adding it to the install list.");
+                return;
+            }
 
-                RefreshInstalledDrivers(_modelTextBox.Text);
-                if (ShouldTryExactVendorDriver())
-                {
-                    SetStatus("Trying to register the exact " + _currentRecommendation.Vendor + " driver name before creating the queue...");
-                    InstallDriverWorkflow(false);
-                    RefreshInstalledDrivers(_modelTextBox.Text);
-                }
+            if (string.IsNullOrWhiteSpace(_modelTextBox.Text))
+            {
+                ShowListValidation("Find the printer or enter its model before adding it to the install list.");
+                return;
+            }
 
-                if (_installedDriverComboBox.SelectedItem == null)
+            if (string.IsNullOrWhiteSpace(_printerNameTextBox.Text))
+            {
+                ShowListValidation("Enter a queue name before adding the printer to the install list.");
+                return;
+            }
+
+            if (_currentRecommendation == null || !_currentRecommendation.IsKnownVendor)
+            {
+                ShowListValidation("Select the printer brand before adding it to the install list.");
+                return;
+            }
+
+            var queueName = _printerNameTextBox.Text.Trim();
+            var existingQueue = GetInstallRows().FirstOrDefault(row =>
+                !string.Equals(GetInstallItem(row).IpAddress, parsedAddress.ToString(), StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(GetInstallItem(row).QueueName, queueName, StringComparison.OrdinalIgnoreCase));
+            if (existingQueue != null)
+            {
+                ShowListValidation("Another printer in the install list already uses the queue name '" + queueName + "'.");
+                return;
+            }
+
+            var driverName = Convert.ToString(_installedDriverComboBox.SelectedItem);
+            if (!DriverCatalog.IsCompatibleDriverName(driverName, _modelTextBox.Text, _currentRecommendation.Vendor))
+            {
+                driverName = string.Empty;
+            }
+
+            var item = new PrinterInstallItem
+            {
+                IpAddress = parsedAddress.ToString(),
+                Model = _modelTextBox.Text.Trim(),
+                Vendor = _currentRecommendation.Vendor,
+                QueueName = queueName,
+                DriverName = driverName,
+                Status = "Ready",
+                Details = string.Empty,
+                Recommendation = _catalog.Recommend(_currentRecommendation.Vendor, _modelTextBox.Text.Trim())
+            };
+
+            var existingAddress = GetInstallRows().FirstOrDefault(row =>
+                string.Equals(GetInstallItem(row).IpAddress, item.IpAddress, StringComparison.OrdinalIgnoreCase));
+            if (existingAddress != null)
+            {
+                var existingItem = GetInstallItem(existingAddress);
+                if (string.Equals(existingItem.Status, "Installed", StringComparison.OrdinalIgnoreCase))
                 {
-                    SetStatus("Install stopped before a model-specific driver was selected.");
-                    MessageBox.Show(this, "The driver package was staged, but Windows did not expose a matching print driver name for this model. Try Refresh Installed Drivers. If the list is still empty, the vendor package may require its own installer before Windows will register the print driver.", "Driver registration needed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    ShowListValidation("That printer is already marked Installed. Remove its row before adding it again.");
                     return;
                 }
 
-                var driverName = Convert.ToString(_installedDriverComboBox.SelectedItem);
-                _installer.CreateQueue(_ipAddressTextBox.Text, _printerNameTextBox.Text, driverName, _modelTextBox.Text, GetPreferredVendor());
-                SetStatus("Driver and print object installed.");
-                MessageBox.Show(this, "Driver and print object installed. Defaults were set to black-and-white and one-sided where Windows allowed it.", "Install complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                existingAddress.Tag = item;
+                UpdateInstallRow(existingAddress, item);
+                SetStatus("Updated " + item.IpAddress + " in the install list.");
             }
-            catch (Exception ex)
+            else
             {
-                SetStatus(ex.Message);
-                MessageBox.Show(this, ex.Message, "Install failed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                var rowIndex = _installListGrid.Rows.Add();
+                var row = _installListGrid.Rows[rowIndex];
+                row.Tag = item;
+                UpdateInstallRow(row, item);
+                SetStatus("Added " + item.IpAddress + " to the install list.");
             }
+
+            ResetPrinterEntry();
         }
 
-        private bool ShouldTryExactVendorDriver()
+        private async Task InstallAllAsync()
         {
-            if (_currentRecommendation == null || !_currentRecommendation.IsKnownVendor || _installedDriverComboBox.SelectedItem == null)
+            var pendingRows = GetInstallRows()
+                .Where(row => !string.Equals(GetInstallItem(row).Status, "Installed", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            if (pendingRows.Count == 0)
             {
-                return false;
+                ShowListValidation(_installListGrid.Rows.Count == 0
+                    ? "Add at least one printer to the install list first."
+                    : "Every printer in the list is already installed.");
+                return;
             }
 
-            var selectedDriver = Convert.ToString(_installedDriverComboBox.SelectedItem);
-            return DriverCatalog.IsVendorFamilyMatch(_currentRecommendation.Vendor, selectedDriver) &&
-                !DriverCatalog.IsExactVendorMatch(_currentRecommendation.Vendor, selectedDriver);
+            var installedCount = 0;
+            var failedCount = 0;
+            SetBusy(true, "Installing " + pendingRows.Count + " printer(s)...");
+            try
+            {
+                // A failed vendor package or queue should not prevent later rows from being attempted.
+                foreach (var row in pendingRows)
+                {
+                    var item = GetInstallItem(row);
+                    try
+                    {
+                        UpdateInstallProgress(row, "Checking driver", string.Empty);
+                        item.DriverName = await InstallQueuedPrinterAsync(item, row);
+                        UpdateInstallProgress(row, "Installed", "Black-and-white and one-sided defaults applied where supported.");
+                        installedCount++;
+                    }
+                    catch (Exception ex)
+                    {
+                        UpdateInstallProgress(row, "Failed", CondenseMessage(ex.Message));
+                        failedCount++;
+                    }
+                }
+            }
+            finally
+            {
+                SetBusy(false, null);
+            }
+
+            var summary = "Installed " + installedCount + " printer(s).";
+            if (failedCount > 0)
+            {
+                summary += Environment.NewLine + failedCount + " printer(s) failed. Review the Details column, correct the issue, then click Install All to retry failed rows.";
+            }
+
+            SetStatus(summary.Replace(Environment.NewLine, " "));
+            MessageBox.Show(this, summary, "Batch install finished", MessageBoxButtons.OK,
+                failedCount == 0 ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
+        }
+
+        private async Task<string> InstallQueuedPrinterAsync(PrinterInstallItem item, DataGridViewRow row)
+        {
+            var driverName = item.DriverName;
+            if (!DriverCatalog.IsCompatibleDriverName(driverName, item.Model, item.Vendor))
+            {
+                driverName = await FindBestInstalledDriverAsync(item);
+            }
+
+            if (string.IsNullOrWhiteSpace(driverName))
+            {
+                UpdateInstallProgress(row, "Installing driver", item.Recommendation.RecommendedDriver);
+                await Task.Run(() => _downloadService.InstallFromRecommendation(item.Recommendation));
+                driverName = await FindBestInstalledDriverAsync(item);
+            }
+
+            if (ShouldTryExactVendorDriver(item.Vendor, driverName))
+            {
+                UpdateInstallProgress(row, "Matching brand", "Registering the exact " + item.Vendor + " driver name.");
+                await Task.Run(() => _downloadService.InstallFromRecommendation(item.Recommendation));
+                driverName = await FindBestInstalledDriverAsync(item);
+            }
+
+            if (string.IsNullOrWhiteSpace(driverName))
+            {
+                throw new InvalidOperationException("Windows did not expose an approved driver name after staging the vendor package.");
+            }
+
+            UpdateInstallProgress(row, "Creating queue", driverName);
+            await Task.Run(() => _installer.CreateQueue(item.IpAddress, item.QueueName, driverName, item.Model, item.Vendor));
+            return driverName;
+        }
+
+        private async Task<string> FindBestInstalledDriverAsync(PrinterInstallItem item)
+        {
+            var drivers = await Task.Run(() => _installer.GetInstalledPclDrivers(item.Model, item.Vendor));
+            var preferredTerms = GetPreferredModelTerms(item.Model);
+            return drivers
+                .OrderByDescending(driver => ScoreInstalledDriver(driver, preferredTerms, item.Vendor))
+                .FirstOrDefault();
+        }
+
+        private static bool ShouldTryExactVendorDriver(string vendor, string driverName)
+        {
+            return !string.IsNullOrWhiteSpace(driverName) &&
+                DriverCatalog.IsVendorFamilyMatch(vendor, driverName) &&
+                !DriverCatalog.IsExactVendorMatch(vendor, driverName);
+        }
+
+        private IEnumerable<DataGridViewRow> GetInstallRows()
+        {
+            return _installListGrid.Rows.Cast<DataGridViewRow>()
+                .Where(row => row.Tag is PrinterInstallItem);
+        }
+
+        private static PrinterInstallItem GetInstallItem(DataGridViewRow row)
+        {
+            return (PrinterInstallItem)row.Tag;
+        }
+
+        private static void UpdateInstallRow(DataGridViewRow row, PrinterInstallItem item)
+        {
+            row.Cells[0].Value = item.IpAddress;
+            row.Cells[1].Value = item.Model;
+            row.Cells[2].Value = item.Vendor;
+            row.Cells[3].Value = item.QueueName;
+            row.Cells[4].Value = item.DriverName;
+            row.Cells[5].Value = item.Status;
+            row.Cells[6].Value = item.Details;
+        }
+
+        private void UpdateInstallProgress(DataGridViewRow row, string status, string details)
+        {
+            var item = GetInstallItem(row);
+            item.Status = status;
+            item.Details = details ?? string.Empty;
+            UpdateInstallRow(row, item);
+            _installListGrid.ClearSelection();
+            row.Selected = true;
+            _installListGrid.FirstDisplayedScrollingRowIndex = row.Index;
+            SetStatus(item.QueueName + ": " + status + (string.IsNullOrWhiteSpace(details) ? string.Empty : " - " + details));
+        }
+
+        private void RemoveSelectedInstallItems()
+        {
+            var selectedRows = _installListGrid.SelectedRows.Cast<DataGridViewRow>()
+                .OrderByDescending(row => row.Index)
+                .ToList();
+            foreach (var row in selectedRows)
+            {
+                _installListGrid.Rows.Remove(row);
+            }
+
+            SetStatus(selectedRows.Count == 0
+                ? "Select one or more install-list rows to remove."
+                : "Removed " + selectedRows.Count + " printer(s) from the install list.");
+        }
+
+        private void ClearInstallList()
+        {
+            if (_installListGrid.Rows.Count == 0)
+            {
+                SetStatus("The install list is already empty.");
+                return;
+            }
+
+            if (MessageBox.Show(this, "Clear every printer from the install list?", "Clear install list",
+                MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+            {
+                return;
+            }
+
+            _installListGrid.Rows.Clear();
+            SetStatus("Install list cleared.");
+        }
+
+        private void LoadSelectedInstallItem()
+        {
+            if (_installListGrid.SelectedRows.Count != 1)
+            {
+                ShowListValidation("Select one printer row to load back into the entry fields.");
+                return;
+            }
+
+            var item = GetInstallItem(_installListGrid.SelectedRows[0]);
+            _ipAddressTextBox.Text = item.IpAddress;
+            _modelTextBox.Text = item.Model;
+            _vendorComboBox.SelectedItem = item.Vendor;
+            _printerNameTextBox.Text = item.QueueName;
+            RefreshInstalledDrivers(item.Model);
+
+            if (!string.IsNullOrWhiteSpace(item.DriverName) && _installedDriverComboBox.Items.Contains(item.DriverName))
+            {
+                _installedDriverComboBox.SelectedItem = item.DriverName;
+            }
+
+            SetStatus("Loaded " + item.IpAddress + ". Edit it, then use Add to Install List to update the row.");
+        }
+
+        private void ResetPrinterEntry()
+        {
+            _settingSuggestedQueueName = true;
+            try
+            {
+                _ipAddressTextBox.Clear();
+                _modelTextBox.Clear();
+                _printerNameTextBox.Clear();
+                _lastSuggestedQueueName = null;
+                _vendorComboBox.SelectedIndex = 0;
+                _installedDriverComboBox.Items.Clear();
+            }
+            finally
+            {
+                _settingSuggestedQueueName = false;
+            }
+
+            _ipAddressTextBox.Focus();
+        }
+
+        private void ShowListValidation(string message)
+        {
+            SetStatus(message);
+            MessageBox.Show(this, message, "Install list", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        private static string CondenseMessage(string message)
+        {
+            if (string.IsNullOrWhiteSpace(message))
+            {
+                return "The operation failed without an error message.";
+            }
+
+            var singleLine = string.Join(" ", message
+                .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(part => part.Trim()));
+            return singleLine.Length > 300 ? singleLine.Substring(0, 297) + "..." : singleLine;
         }
 
         private string GetPreferredVendor()
@@ -582,9 +871,14 @@ namespace Printervention
         {
             _discoverButton.Enabled = !busy;
             _openSupportButton.Enabled = !busy;
-            _installDriverButton.Enabled = !busy;
+            _addToInstallListButton.Enabled = !busy;
             _refreshDriversButton.Enabled = !busy;
             _testPlanButton.Enabled = !busy;
+            _installAllButton.Enabled = !busy;
+            _loadSelectedButton.Enabled = !busy;
+            _removeSelectedButton.Enabled = !busy;
+            _clearListButton.Enabled = !busy;
+            _installListGrid.Enabled = !busy;
 
             if (!string.IsNullOrWhiteSpace(status))
             {

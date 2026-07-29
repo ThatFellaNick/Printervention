@@ -19,7 +19,10 @@ The first version targets .NET Framework 4.8 so it can run on commonly managed W
 - Shows an authorized vendor domain allowlist for driver downloads.
 - Creates a Standard TCP/IP printer port.
 - Can create a printer queue with a selected installed driver.
-- Has an `Install Driver and Print Object` flow that tries automatic official download, extraction, driver staging, and Windows queue creation.
+- Lets operators discover several printers, add each one to an install list, and install the full batch in sequence.
+- Tracks driver resolution, queue creation, success, and failure separately for every printer so one failure does not stop the remaining installs.
+- Lets operators load a selected row back into the entry fields for correction and retry.
+- The `Install All` flow tries automatic official download, extraction, driver staging, and Windows queue creation for each pending row.
 - Driver staging tolerates partial package failures when at least one printer INF is added successfully.
 - Driver staging selects the native Windows architecture and registers duplicate INF driver names only once.
 - After staging, Printervention attempts to register the matching Windows print driver from the INF before creating the queue.
@@ -63,11 +66,11 @@ Hardware is still needed later to verify live SNMP/HTTP discovery, actual driver
 
 1. Enter the printer IP and click `Find Printer`.
 2. Confirm or correct the brand and model.
-3. Click `Install Driver and Print Object`.
-4. Printervention tries to download, extract, stage the model-specific PCL/PCL6 or Kyocera KX package, and create the Windows print object automatically.
-5. If automatic install cannot finish, use the opened vendor page to download the package and extract it.
-6. When prompted, choose the extracted folder that contains `.inf` files.
-7. If automatic matching cannot identify the installed driver name, pick the newly installed model-specific non-v4 PCL/KX driver from `Installed Driver`.
-8. Click `Install Driver and Print Object` again.
+3. Edit the queue name if the model-based default is not what you want.
+4. Click `Add to Install List`.
+5. Repeat discovery and list entry for every printer you want to set up.
+6. Click `Install All`.
+7. Printervention processes each pending row in sequence and records its result in the Status and Details columns.
+8. Use `Load Selected` to correct a failed row and add the updated entry back to the list, then click `Install All` again to retry only rows that are not already installed.
 
-If `Installed Driver` is empty, Windows does not have a matching model-specific PCL/KX driver staged yet. Creating the print object requires a real installed driver name, not just the recommendation text shown in the test plan.
+If `Installed Driver` is empty when a printer is added, the batch installer attempts to obtain and stage the approved vendor driver automatically. A manually selected installed driver is captured with that printer's list entry only when it is compatible with the selected brand and model.
