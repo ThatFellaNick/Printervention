@@ -130,7 +130,7 @@ namespace Printervention
             var normalizedDriverName = NormalizeDriverName(driverName);
             if (!DriverCatalog.IsCompatibleDriverName(normalizedDriverName, preferredModel, preferredVendor))
             {
-                throw new InvalidOperationException("Choose an approved installed PCL/PCL6 or Kyocera KX driver for this printer brand and model. HP Universal Printing PCL 6 is the only universal exception; v4 remains blocked. If the dropdown is empty, use Install Driver and Print Object first.");
+                throw new InvalidOperationException("Choose an approved exact-model printer driver for this brand and model. Brother and Epson names may omit PCL; HP Universal Printing PCL 6 is the only universal exception; v4 remains blocked. If the dropdown is empty, add the printer to the install list so Printervention can stage a driver.");
             }
 
             var portName = "IP_" + parsedIp;

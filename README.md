@@ -13,8 +13,8 @@ The first version targets .NET Framework 4.8 so it can run on commonly managed W
 - Supports the requested major printer brands with a driver catalog.
 - Blocks PCL v4, class-driver, universal, global, and generic driver recommendations, except Canon Generic Plus PCL6 and HP Universal Printing PCL 6 when an exact-model package is unavailable.
 - Resolves detected Canon C5800-series names to the exact Canon model support page and installs Canon's approved Generic Plus PCL6 fallback.
-- Resolves Brother and Epson models through their official product searches and selects exact-model printer/PCL6 packages.
-- Accepts exact-model Brother driver names that omit `PCL`, while continuing to reject Brother generic, universal, BR-Script, XPS, class, and v4 drivers.
+- Resolves Brother and Epson models through their official product searches and selects exact-model printer packages, preferring PCL/PCL6 when the vendor labels it.
+- Accepts exact-model Brother and Epson package and Windows driver names that omit `PCL`, while continuing to reject generic, universal, XPS, class, v4, and conflicting-brand drivers. Brother BR-Script and PostScript names also remain blocked.
 - Prefers installed exact-model HP PCL6 drivers and uses HP's signed Type 3 Universal Printing PCL 6 package only as the HP fallback.
 - Shows an authorized vendor domain allowlist for driver downloads.
 - Creates a Standard TCP/IP printer port.

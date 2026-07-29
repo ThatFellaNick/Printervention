@@ -128,8 +128,11 @@ namespace Printervention
 
                 var driverListHtml = client.DownloadString(osPage.Url);
                 var driverDetails = ExtractAnchorLinks(driverListHtml, osPage.Url)
-                    .FirstOrDefault(link => link.Url.IndexOf("downloadend.aspx", StringComparison.OrdinalIgnoreCase) >= 0 &&
-                        link.Text.Equals("Printer Driver", StringComparison.OrdinalIgnoreCase));
+                    .Where(link => link.Url.IndexOf("downloadend.aspx", StringComparison.OrdinalIgnoreCase) >= 0 &&
+                        link.Text.IndexOf("Printer Driver", StringComparison.OrdinalIgnoreCase) >= 0 &&
+                        link.Text.IndexOf("BR-Script", StringComparison.OrdinalIgnoreCase) < 0)
+                    .OrderByDescending(link => link.Text.Equals("Printer Driver", StringComparison.OrdinalIgnoreCase) ? 2 : 1)
+                    .FirstOrDefault();
                 if (driverDetails == null)
                 {
                     throw new InvalidOperationException("Brother did not list an exact-model Printer Driver package for this model.");
@@ -172,14 +175,14 @@ namespace Printervention
                 var modelHtml = client.DownloadString(modelPage.Url);
                 var package = ExtractLinks(modelHtml, modelPage.Url)
                     .Where(candidate => recommendation.IsAuthorizedUrl(candidate.Url))
-                    .Where(IsDriverDownloadCandidate)
+                    .Where(candidate => IsDriverDownloadCandidate(candidate, recommendation))
                     .Where(candidate => !IsBlockedDriverUrl(candidate.Url, candidate.Context, recommendation))
                     .OrderByDescending(candidate => ScoreDriverUrl(candidate, recommendation) +
                         (candidate.Url.IndexOf("Core_X64", StringComparison.OrdinalIgnoreCase) >= 0 ? 25 : 0))
                     .FirstOrDefault();
                 if (package == null)
                 {
-                    throw new InvalidOperationException("Epson did not list an exact-model PCL6 package for this model.");
+                    throw new InvalidOperationException("Epson did not list an exact-model printer driver package for this model.");
                 }
 
                 return package.Url;
@@ -252,6 +255,11 @@ namespace Printervention
 
         private static bool IsDriverDownloadCandidate(DriverDownloadCandidate candidate)
         {
+            return IsDriverDownloadCandidate(candidate, null);
+        }
+
+        private static bool IsDriverDownloadCandidate(DriverDownloadCandidate candidate, DriverRecommendation recommendation)
+        {
             var loweredUrl = Uri.UnescapeDataString(candidate.Url).ToLowerInvariant();
             var loweredContext = candidate.Context.ToLowerInvariant();
             var looksLikePackage = loweredUrl.EndsWith(".zip") ||
@@ -260,11 +268,16 @@ namespace Printervention
                 loweredUrl.Contains("download") ||
                 loweredUrl.Contains("/pub_");
 
-            return looksLikePackage && (loweredUrl.Contains("pcl") ||
+            var hasPclLabel = loweredUrl.Contains("pcl") ||
                 loweredUrl.Contains("pcl6") ||
                 loweredUrl.Contains("pcl_6") ||
                 loweredContext.Contains("pcl 6 driver") ||
-                loweredContext.Contains("pcl6 driver"));
+                loweredContext.Contains("pcl6 driver");
+            var isEpsonExactModelPrinterPackage = recommendation != null &&
+                recommendation.Vendor.Equals("Epson", StringComparison.OrdinalIgnoreCase) &&
+                (loweredContext.Contains("printer driver") || loweredUrl.Contains("core_x64"));
+
+            return looksLikePackage && (hasPclLabel || isEpsonExactModelPrinterPackage);
         }
 
         private static bool IsBlockedDriverUrl(string url, string context, DriverRecommendation recommendation)

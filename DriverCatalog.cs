@@ -92,7 +92,7 @@ namespace Printervention
         {
             var isAllowed = IsAllowedDriverName(driverName, preferredModel, IsCanonGenericPlusAllowed(preferredVendor)) ||
                 IsAllowedKyoceraKxDriver(driverName, preferredModel, preferredVendor) ||
-                IsAllowedBrotherModelDriver(driverName, preferredModel, preferredVendor) ||
+                IsAllowedBrotherOrEpsonModelDriver(driverName, preferredModel, preferredVendor) ||
                 IsAllowedHpUniversalPcl6Driver(driverName, preferredVendor);
 
             return isAllowed &&
@@ -162,19 +162,26 @@ namespace Printervention
                 LooksLikeModelSpecificDriver(driverName, preferredModel);
         }
 
-        private static bool IsAllowedBrotherModelDriver(string driverName, string preferredModel, string preferredVendor)
+        private static bool IsAllowedBrotherOrEpsonModelDriver(string driverName, string preferredModel, string preferredVendor)
         {
-            if (!string.Equals(preferredVendor, "Brother", StringComparison.OrdinalIgnoreCase) ||
+            var isBrother = string.Equals(preferredVendor, "Brother", StringComparison.OrdinalIgnoreCase);
+            var isEpson = string.Equals(preferredVendor, "Epson", StringComparison.OrdinalIgnoreCase);
+            if ((!isBrother && !isEpson) ||
                 string.IsNullOrWhiteSpace(driverName))
             {
                 return false;
             }
 
             var name = driverName.ToLowerInvariant();
-            return name.Contains("brother") &&
-                !name.Contains("universal") && !name.Contains("generic") &&
-                !name.Contains("br-script") && !name.Contains("postscript") &&
-                !name.Contains(" xps") && !name.Contains(" v4") && !name.Contains("class driver") &&
+            var isBlocked = name.Contains("universal") || name.Contains("global") || name.Contains("generic") ||
+                name.Contains(" v4") || name.EndsWith("v4") || name.Contains("class driver") ||
+                name.Contains("ipp class") || name.Contains(" xps") || name.EndsWith("xps") ||
+                name.Contains("scanner") || name.Contains("fax");
+            var isBlockedBrotherLanguage = isBrother &&
+                (name.Contains("br-script") || name.Contains("postscript"));
+
+            // These vendors commonly publish exact-model Type 3 printer names without a PCL label.
+            return !isBlocked && !isBlockedBrotherLanguage &&
                 HasPreferredModelTerms(preferredModel) && LooksLikeModelSpecificDriver(driverName, preferredModel);
         }
 
@@ -348,9 +355,9 @@ namespace Printervention
         {
             return new List<VendorDriverProfile>
             {
-                new VendorDriverProfile("Brother", "Brother exact-model printer driver for PCL-capable devices", "https://support.brother.com/", "Use the exact-model Brother Printer Driver package. Brother driver names may omit PCL even when the device uses PCL emulation. Avoid universal, generic, BR-Script, class, and v4 drivers.", new[] { "brother.com", "support.brother.com", "download.brother.com" }, "brother"),
+                new VendorDriverProfile("Brother", "Brother exact-model printer driver", "https://support.brother.com/", "Prefer an exact-model PCL/PCL6 package when Brother labels one. Otherwise, use Brother's exact-model Printer Driver even when its package or Windows driver name omits PCL. Avoid universal, generic, BR-Script, class, and v4 drivers.", new[] { "brother.com", "support.brother.com", "download.brother.com" }, "brother"),
                 new VendorDriverProfile("Canon", "Canon model-specific PCL6 or Generic Plus PCL6 printer driver", "https://www.usa.canon.com/support", "Prefer an exact model-specific Canon PCL6 package. Canon Generic Plus PCL6 is allowed when Canon does not offer a model-specific package. Avoid UFR II-only, PS-only, class, universal, and v4 packages.", new[] { "canon.com", "usa.canon.com", "downloads.canon.com" }, "canon"),
-                new VendorDriverProfile("Epson", "Epson model-specific PCL6 printer driver", "https://epson.com/Support/sl/s", "Use the exact model page and select the model-specific PCL/PCL6 package when the device supports PCL. Avoid Universal Print Driver, ESC/P-R-only, class, and v4 packages.", new[] { "epson.com", "ftp.epson.com" }, "epson"),
+                new VendorDriverProfile("Epson", "Epson exact-model printer driver", "https://epson.com/Support/sl/s", "Prefer an exact-model PCL/PCL6 package when Epson labels one. Otherwise, use Epson's exact-model Printer Driver even when its package or Windows driver name omits PCL. Avoid universal, generic, class, and v4 packages.", new[] { "epson.com", "ftp.epson.com" }, "epson"),
                 new VendorDriverProfile("Fujifilm", "FUJIFILM model-specific PCL6 print driver", "https://support-fb.fujifilm.com/", "Use the exact FUJIFILM Business Innovation model page and select the model-specific PCL6 package. Avoid universal and v4 packages.", new[] { "fujifilm.com", "support-fb.fujifilm.com" }, "fujifilm", "fuji xerox"),
                 new VendorDriverProfile("Fujitsu", "Fujitsu PCL Printer Driver", "https://www.fujitsu.com/global/support/products/computing/peripheral/printers/", "Use the model-specific PCL driver when available. Fujitsu support varies heavily by printer family.", new[] { "fujitsu.com" }, "fujitsu"),
                 new VendorDriverProfile("HP", "HP model-specific PCL6, or HP Universal Printing PCL 6 fallback", "https://support.hp.com/drivers", "Prefer an installed exact-model HP PCL6 driver. When HP offers no model-specific PCL6 package, HP Universal Printing PCL 6 Type 3 is allowed. Avoid HP Smart Universal v4, IPP class, and all non-PCL packages.", new[] { "hp.com", "support.hp.com", "ftp.hp.com", "hpe.com" }, "hewlett-packard", "hewlett packard", "hp"),

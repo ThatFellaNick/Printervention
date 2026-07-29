@@ -443,8 +443,8 @@ namespace Printervention
                 "Official driver page: " + _currentRecommendation.SupportUrl + Environment.NewLine + Environment.NewLine +
                 "Authorized vendor domains: " + _currentRecommendation.AuthorizedDomainDisplay + Environment.NewLine + Environment.NewLine +
                 "Rules:" + Environment.NewLine +
-                "- Use PCL/PCL6, or an exact-model Kyocera KX driver." + Environment.NewLine +
-                "- Prefer exact-model drivers. Brother exact-model names may omit the word PCL." + Environment.NewLine +
+                "- Prefer PCL/PCL6 when the vendor offers it, or an exact-model Kyocera KX driver." + Environment.NewLine +
+                "- Brother and Epson exact-model printer drivers are allowed when their names omit PCL." + Environment.NewLine +
                 "- Canon Generic Plus PCL6 and HP Universal Printing PCL 6 are allowed only as vendor-specific fallbacks." + Environment.NewLine +
                 "- Avoid all other universal, global, and generic drivers." + Environment.NewLine +
                 "- Do not use PCL v4, class drivers, IPP class drivers, or vendor app-only packages." + Environment.NewLine +
@@ -844,9 +844,10 @@ namespace Printervention
             }
 
             var usingRecommendationPlaceholder = string.Equals(driverName, _currentRecommendation.RecommendedDriver, StringComparison.OrdinalIgnoreCase);
-            if (!DriverCatalog.IsCompatibleDriverName(driverName, usingRecommendationPlaceholder ? null : _modelTextBox.Text, GetPreferredVendor()))
+            if (!usingRecommendationPlaceholder &&
+                !DriverCatalog.IsCompatibleDriverName(driverName, _modelTextBox.Text, GetPreferredVendor()))
             {
-                throw new InvalidOperationException("The selected or recommended driver is not an approved non-v4 PCL/PCL6 or Kyocera KX driver for this printer brand and model.");
+                throw new InvalidOperationException("The selected driver is not an approved exact-model, non-v4 printer driver for this brand and model.");
             }
 
             if (_currentRecommendation.IsKnownVendor && !_currentRecommendation.IsAuthorizedUrl(_currentRecommendation.SupportUrl))
