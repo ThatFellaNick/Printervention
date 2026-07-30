@@ -179,11 +179,41 @@ namespace Printervention
             TryApplyWmiPrinterDefaults(printerName);
             var nativeDefaultsApplied = TryApplyNativeDevModeDefaults(printerName);
             var printTicketDefaultsApplied = TryApplyManagedPrintTicketDefaults(printerName);
+            var printConfigurationDefaultsApplied = false;
             if (!nativeDefaultsApplied && !printTicketDefaultsApplied)
+            {
+                printConfigurationDefaultsApplied = TryApplyWindowsPrintConfigurationDefaults(printerName);
+            }
+
+            if (!nativeDefaultsApplied && !printTicketDefaultsApplied && !printConfigurationDefaultsApplied)
             {
                 throw new InvalidOperationException(
                     "The printer queue was created, but its driver rejected the black-and-white and one-sided defaults. " +
                     "Open Printing Preferences and set Color to Black and White and Duplex to One-sided.");
+            }
+        }
+
+        private static bool TryApplyWindowsPrintConfigurationDefaults(string printerName)
+        {
+            try
+            {
+                // Some Type 3 drivers, including certain Kyocera KX releases, expose defaults only
+                // through the Windows PrintManagement provider rather than standard DEVMODE fields.
+                var powerShell = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.System),
+                    "WindowsPowerShell",
+                    "v1.0",
+                    "powershell.exe");
+                var command =
+                    "$ErrorActionPreference='Stop'; " +
+                    "Set-PrintConfiguration -PrinterName " + PowerShellQuote(printerName) +
+                    " -Color $false -DuplexingMode OneSided";
+                RunProcessWithOutput(powerShell, "-NoProfile -NonInteractive -Command " + Quote(command), true);
+                return true;
+            }
+            catch
+            {
+                return false;
             }
         }
 
@@ -612,6 +642,11 @@ namespace Printervention
         private static string Quote(string value)
         {
             return "\"" + value.Replace("\"", "\\\"") + "\"";
+        }
+
+        private static string PowerShellQuote(string value)
+        {
+            return "'" + value.Replace("'", "''") + "'";
         }
 
         private static string EscapeWql(string value)

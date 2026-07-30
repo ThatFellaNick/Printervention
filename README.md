@@ -39,7 +39,7 @@ Download the current portable Windows executable from [GitHub Releases](https://
 - Includes a Test Plan button for no-printer validation.
 - Applies and validates black-and-white and one-sided defaults through the driver's native DEVMODE plus managed PrintTicket fallback.
 - Disables Canon's separate Auto Color Detection setting so Canon preferences show `Black and White` rather than `Auto [Color/B&W]`.
-- Creates queues through the Windows spooler API and applies print tickets through .NET Framework; it does not launch PowerShell.
+- Creates queues through the Windows spooler API and applies defaults natively first. Windows PrintManagement is used only as a final fallback for drivers such as Kyocera KX that reject standard DEVMODE and PrintTicket settings.
 
 ## Antivirus and signing
 
