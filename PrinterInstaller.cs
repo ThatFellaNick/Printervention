@@ -141,7 +141,15 @@ namespace Printervention
             EnsurePrinterDoesNotExist(printerName.Trim());
 
             CreatePrinterQueueWithFallbacks(printerName.Trim(), portName, normalizedDriverName);
-            ApplyPrinterDefaults(printerName.Trim());
+            try
+            {
+                ApplyPrinterDefaults(printerName.Trim());
+            }
+            catch (Exception ex)
+            {
+                TryDeletePrinterQueue(printerName.Trim());
+                throw new InvalidOperationException(ex.Message + " The incomplete queue was removed so the install can be retried.", ex);
+            }
         }
 
         private static void EnsureTcpIpPort(string portName, string ipAddress)
@@ -169,10 +177,111 @@ namespace Printervention
         private static void ApplyPrinterDefaults(string printerName)
         {
             TryApplyWmiPrinterDefaults(printerName);
-            TryApplyManagedPrintTicketDefaults(printerName);
+            var nativeDefaultsApplied = TryApplyNativeDevModeDefaults(printerName);
+            var printTicketDefaultsApplied = TryApplyManagedPrintTicketDefaults(printerName);
+            if (!nativeDefaultsApplied && !printTicketDefaultsApplied)
+            {
+                throw new InvalidOperationException(
+                    "The printer queue was created, but its driver rejected the black-and-white and one-sided defaults. " +
+                    "Open Printing Preferences and set Color to Black and White and Duplex to One-sided.");
+            }
         }
 
-        private static void TryApplyManagedPrintTicketDefaults(string printerName)
+        private static bool TryApplyNativeDevModeDefaults(string printerName)
+        {
+            const uint printerAccessAdminister = 0x00000004;
+            const uint printerAccessUse = 0x00000008;
+            const int dmOutBuffer = 0x00000002;
+            const int dmInBuffer = 0x00000008;
+            const uint dmColor = 0x00000800;
+            const uint dmDuplex = 0x00001000;
+            const short dmColorMonochrome = 1;
+            const short dmDuplexSimplex = 1;
+
+            var defaults = new PrinterDefaults
+            {
+                DesiredAccess = printerAccessAdminister | printerAccessUse
+            };
+
+            IntPtr printerHandle;
+            if (!NativeOpenPrinter(printerName, out printerHandle, ref defaults))
+            {
+                return false;
+            }
+
+            IntPtr devMode = IntPtr.Zero;
+            IntPtr printerInformation = IntPtr.Zero;
+            try
+            {
+                var devModeSize = NativeDocumentProperties(IntPtr.Zero, printerHandle, printerName, IntPtr.Zero, IntPtr.Zero, 0);
+                if (devModeSize < 96)
+                {
+                    return false;
+                }
+
+                devMode = Marshal.AllocHGlobal(devModeSize);
+                if (NativeDocumentProperties(IntPtr.Zero, printerHandle, printerName, devMode, IntPtr.Zero, dmOutBuffer) != 1)
+                {
+                    return false;
+                }
+
+                // DEVMODEW's standard fields precede the driver-private data returned in this same buffer.
+                var fields = unchecked((uint)Marshal.ReadInt32(devMode, 72));
+                Marshal.WriteInt32(devMode, 72, unchecked((int)(fields | dmColor | dmDuplex)));
+                Marshal.WriteInt16(devMode, 92, dmColorMonochrome);
+                Marshal.WriteInt16(devMode, 94, dmDuplexSimplex);
+
+                if (NativeDocumentProperties(IntPtr.Zero, printerHandle, printerName, devMode, devMode, dmInBuffer | dmOutBuffer) != 1)
+                {
+                    return false;
+                }
+
+                var validatedFields = unchecked((uint)Marshal.ReadInt32(devMode, 72));
+                var colorAccepted = (validatedFields & dmColor) == 0 || Marshal.ReadInt16(devMode, 92) == dmColorMonochrome;
+                var duplexAccepted = (validatedFields & dmDuplex) == 0 || Marshal.ReadInt16(devMode, 94) == dmDuplexSimplex;
+                if (!colorAccepted || !duplexAccepted)
+                {
+                    return false;
+                }
+
+                printerInformation = Marshal.AllocHGlobal(IntPtr.Size);
+                Marshal.WriteIntPtr(printerInformation, devMode);
+
+                // Level 8 sets administrator-controlled global defaults; level 9 covers the caller profile.
+                var globalSet = NativeSetPrinter(printerHandle, 8, printerInformation, 0);
+                var userSet = NativeSetPrinter(printerHandle, 9, printerInformation, 0);
+                if (!globalSet && !userSet)
+                {
+                    return false;
+                }
+
+                if (NativeDocumentProperties(IntPtr.Zero, printerHandle, printerName, devMode, IntPtr.Zero, dmOutBuffer) != 1)
+                {
+                    return false;
+                }
+
+                var persistedFields = unchecked((uint)Marshal.ReadInt32(devMode, 72));
+                var persistedColor = (persistedFields & dmColor) == 0 || Marshal.ReadInt16(devMode, 92) == dmColorMonochrome;
+                var persistedDuplex = (persistedFields & dmDuplex) == 0 || Marshal.ReadInt16(devMode, 94) == dmDuplexSimplex;
+                return persistedColor && persistedDuplex;
+            }
+            finally
+            {
+                if (printerInformation != IntPtr.Zero)
+                {
+                    Marshal.FreeHGlobal(printerInformation);
+                }
+
+                if (devMode != IntPtr.Zero)
+                {
+                    Marshal.FreeHGlobal(devMode);
+                }
+
+                NativeClosePrinter(printerHandle);
+            }
+        }
+
+        private static bool TryApplyManagedPrintTicketDefaults(string printerName)
         {
             try
             {
@@ -187,11 +296,18 @@ namespace Printervention
                     var validated = queue.MergeAndValidatePrintTicket(baseTicket, requestedTicket);
                     queue.DefaultPrintTicket = validated.ValidatedPrintTicket;
                     queue.Commit();
+                    queue.Refresh();
+
+                    var applied = queue.DefaultPrintTicket ?? validated.ValidatedPrintTicket;
+                    var colorAccepted = !applied.OutputColor.HasValue || applied.OutputColor == OutputColor.Monochrome;
+                    var duplexAccepted = !applied.Duplexing.HasValue || applied.Duplexing == Duplexing.OneSided;
+                    return colorAccepted && duplexAccepted;
                 }
             }
             catch
             {
-                // Vendor drivers vary; WMI defaults still provide a conservative fallback.
+                // Native DEVMODE handling remains available for drivers that reject PrintTicket calls.
+                return false;
             }
         }
 
@@ -271,6 +387,29 @@ namespace Printervention
             using (var searcher = new ManagementObjectSearcher("SELECT Name FROM Win32_Printer WHERE Name='" + EscapeWql(printerName) + "'"))
             {
                 return searcher.Get().Count > 0;
+            }
+        }
+
+        private static void TryDeletePrinterQueue(string printerName)
+        {
+            var defaults = new PrinterDefaults
+            {
+                DesiredAccess = 0x00000004 | 0x00000008
+            };
+
+            IntPtr printerHandle;
+            if (!NativeOpenPrinter(printerName, out printerHandle, ref defaults))
+            {
+                return;
+            }
+
+            try
+            {
+                NativeDeletePrinter(printerHandle);
+            }
+            finally
+            {
+                NativeClosePrinter(printerHandle);
             }
         }
 
@@ -506,8 +645,37 @@ namespace Printervention
             public uint AveragePagesPerMinute;
         }
 
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        private struct PrinterDefaults
+        {
+            public string DataType;
+            public IntPtr DevMode;
+            public uint DesiredAccess;
+        }
+
         [DllImport("winspool.drv", EntryPoint = "AddPrinterW", CharSet = CharSet.Unicode, SetLastError = true)]
         private static extern IntPtr NativeAddPrinter(string serverName, uint level, ref PrinterInfo2 printerInformation);
+
+        [DllImport("winspool.drv", EntryPoint = "OpenPrinterW", CharSet = CharSet.Unicode, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool NativeOpenPrinter(string printerName, out IntPtr printerHandle, ref PrinterDefaults defaults);
+
+        [DllImport("winspool.drv", EntryPoint = "DocumentPropertiesW", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern int NativeDocumentProperties(
+            IntPtr windowHandle,
+            IntPtr printerHandle,
+            string deviceName,
+            IntPtr devModeOutput,
+            IntPtr devModeInput,
+            int mode);
+
+        [DllImport("winspool.drv", EntryPoint = "SetPrinterW", CharSet = CharSet.Unicode, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool NativeSetPrinter(IntPtr printerHandle, uint level, IntPtr printerInformation, uint command);
+
+        [DllImport("winspool.drv", EntryPoint = "DeletePrinter", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool NativeDeletePrinter(IntPtr printerHandle);
 
         [DllImport("winspool.drv", EntryPoint = "ClosePrinter", SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]

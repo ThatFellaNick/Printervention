@@ -35,9 +35,9 @@ Download the current portable Windows executable from [GitHub Releases](https://
 - Driver staging tolerates partial package failures when at least one printer INF is added successfully.
 - Driver staging selects the native Windows architecture and registers duplicate INF driver names only once.
 - After staging, Printervention attempts to register the matching Windows print driver from the INF before creating the queue.
-- Cleans Windows driver-store names before calling `Add-Printer`.
+- Cleans Windows driver-store names before creating the queue through the native spooler API.
 - Includes a Test Plan button for no-printer validation.
-- Attempts to default the queue to black-and-white and one-sided printing.
+- Applies and validates black-and-white and one-sided defaults through the driver's native DEVMODE plus managed PrintTicket fallback.
 - Disables Canon's separate Auto Color Detection setting so Canon preferences show `Black and White` rather than `Auto [Color/B&W]`.
 - Creates queues through the Windows spooler API and applies print tickets through .NET Framework; it does not launch PowerShell.
 
