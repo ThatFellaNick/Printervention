@@ -4,7 +4,7 @@
   Runs in the caller's existing security context without requesting elevation.
 -->
 <assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
-  <assemblyIdentity version="1.0.6.0" name="Printervention.app" />
+  <assemblyIdentity version="1.0.7.0" name="Printervention.app" />
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
     <security>
       <requestedPrivileges>

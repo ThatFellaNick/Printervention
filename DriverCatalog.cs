@@ -372,7 +372,7 @@ namespace Printervention
                 new VendorDriverProfile("Savin", "Savin model-specific PCL6 printer driver", "https://www.ricoh-usa.com/en/support-and-download", "Savin devices usually share Ricoh driver families. Use the exact model page and select the model-specific PCL6 package. Avoid universal and v4 packages.", new[] { "ricoh.com", "support.ricoh.com", "ricoh-usa.com" }, "savin", "ricoh", "gestetner", "lanier", "nashuatec", "rex-rotary", "aficio"),
                 new VendorDriverProfile("Sharp", "Sharp model-specific PCL6 printer driver", "https://global.sharp/restricted/products/copier/downloads/search/us/detail/018282/download.html", "Use the exact model page and select the model-specific PCL6 package. Avoid Universal Print Driver, class, and v4 packages.", new[] { "sharpusa.com", "sharp.com", "global.sharp" }, "sharp"),
                 new VendorDriverProfile("Toshiba", "Toshiba model-specific PCL6 printer driver", "https://business.toshiba.com/support/downloads", "Use the exact model page and select the model-specific PCL6 package. Avoid Universal Printer 2, class, and v4 packages.", new[] { "toshiba.com", "business.toshiba.com" }, "toshiba", "e-studio"),
-                new VendorDriverProfile("Xerox", "Xerox model-specific PCL6 printer driver", "https://www.support.xerox.com/", "Use the exact model page and select the model-specific PCL6 package. Avoid Global Print Driver, class, and v4 packages.", new[] { "xerox.com", "support.xerox.com" }, "xerox")
+                new VendorDriverProfile("Xerox", "Xerox model-specific V3 PCL6 printer driver", "https://www.support.xerox.com/en-us/search-results#t=DriversDownloads", "Use the exact Xerox product page and select a model-specific V3 PCL6 package. Avoid Smart Start, Global Print Driver, class, generic, and V4 packages. Some newer Xerox models offer only V4 or Global packages and cannot be installed under these rules.", new[] { "xerox.com", "support.xerox.com", "download.support.xerox.com" }, "xerox", "versalink", "altalink", "workcentre", "phaser", "primelink")
             };
         }
     }
@@ -516,7 +516,93 @@ namespace Printervention
                 }
             }
 
+            if (profile.DisplayName.Equals("Xerox", StringComparison.OrdinalIgnoreCase))
+            {
+                var xeroxSlug = BuildXeroxModelSlug(model);
+                if (!string.IsNullOrWhiteSpace(xeroxSlug))
+                {
+                    return "https://www.support.xerox.com/en-us/product/" + xeroxSlug + "/downloads";
+                }
+            }
+
             return profile.SupportUrl;
+        }
+
+        private static string BuildXeroxModelSlug(string model)
+        {
+            if (string.IsNullOrWhiteSpace(model))
+            {
+                return string.Empty;
+            }
+
+            var normalized = Regex.Replace(model, @"\b(Xerox|Color|Multifunction|Copier|Printer|MFP)\b", " ", RegexOptions.IgnoreCase);
+            normalized = Regex.Replace(normalized, @"\s+", " ").Trim();
+
+            if (Regex.IsMatch(normalized, @"\bPrimeLink\s+C(?:9065|9070)\b", RegexOptions.IgnoreCase))
+            {
+                return "primelink-c9065-c9070";
+            }
+
+            if (Regex.IsMatch(normalized, @"\bPrimeLink\s+B(?:9100|9110|9125|9136)\b", RegexOptions.IgnoreCase))
+            {
+                return "primelink-b9100-b9110-b9125-b9136";
+            }
+
+            var product = Regex.Match(normalized,
+                @"\b(?<family>VersaLink|Phaser|PrimeLink)\s+(?<models>[A-Z]?\d{3,5}(?:\s*[/]\s*[A-Z]?\d{3,5})*)\b",
+                RegexOptions.IgnoreCase);
+            if (product.Success)
+            {
+                var family = product.Groups["family"].Value.ToLowerInvariant();
+                var models = Regex.Replace(product.Groups["models"].Value, @"\s*/\s*", "-").ToLowerInvariant();
+                return family + "-" + models;
+            }
+
+            var altaLink = Regex.Match(normalized, @"\bAltaLink\s+(?<model>[BC](?<series>80|81)\d{2})\b", RegexOptions.IgnoreCase);
+            if (altaLink.Success)
+            {
+                return "altalink-" + altaLink.Groups["model"].Value.Substring(0, 1).ToLowerInvariant() +
+                    altaLink.Groups["series"].Value + "00-series";
+            }
+
+            var workCentre = Regex.Match(normalized, @"\bWorkCentre\s+(?<model>\d{4})\b", RegexOptions.IgnoreCase);
+            if (workCentre.Success)
+            {
+                return BuildXeroxWorkCentreSlug(workCentre.Groups["model"].Value);
+            }
+
+            if (Regex.IsMatch(normalized, @"\bD(?:95|110|125)\b", RegexOptions.IgnoreCase))
+            {
+                return "xerox-d95-d110-d125";
+            }
+
+            var xeroxModel = Regex.Match(normalized, @"\b(?<model>[BC]\d{3})\b", RegexOptions.IgnoreCase);
+            if (xeroxModel.Success)
+            {
+                var value = xeroxModel.Groups["model"].Value.ToLowerInvariant();
+                return "xerox-" + value + (value.StartsWith("c", StringComparison.Ordinal) ? "-color-printer" : "-printer");
+            }
+
+            return string.Empty;
+        }
+
+        private static string BuildXeroxWorkCentreSlug(string model)
+        {
+            var groups = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                { "5325", "workcentre-5300-series" }, { "5330", "workcentre-5300-series" }, { "5335", "workcentre-5300-series" },
+                { "5945", "workcentre-5945-5955" }, { "5955", "workcentre-5945-5955" },
+                { "7120", "workcentre-7120-7125" }, { "7125", "workcentre-7120-7125" },
+                { "7220", "workcentre-7220-7225" }, { "7225", "workcentre-7220-7225" },
+                { "7525", "workcentre-7525-7530-7535-7545-7556" }, { "7530", "workcentre-7525-7530-7535-7545-7556" },
+                { "7535", "workcentre-7525-7530-7535-7545-7556" }, { "7545", "workcentre-7525-7530-7535-7545-7556" },
+                { "7556", "workcentre-7525-7530-7535-7545-7556" },
+                { "7830", "workcentre-7800-series" }, { "7835", "workcentre-7800-series" },
+                { "7845", "workcentre-7800-series" }, { "7855", "workcentre-7800-series" }
+            };
+
+            string slug;
+            return groups.TryGetValue(model, out slug) ? slug : "workcentre-" + model;
         }
 
         private static string BuildCanonModelSlug(string model)

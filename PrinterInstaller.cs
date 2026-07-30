@@ -68,14 +68,23 @@ namespace Printervention
                 throw new ArgumentException("Choose a folder that contains the extracted driver files.", "folderPath");
             }
 
-            var infFiles = Directory.EnumerateFiles(folderPath, "*.inf", SearchOption.AllDirectories)
+            var printerInfFiles = Directory.EnumerateFiles(folderPath, "*.inf", SearchOption.AllDirectories)
                 .Where(IsLikelyPrinterDriverInf)
                 .Where(IsNativeArchitectureInf)
                 .OrderBy(path => path)
                 .ToList();
+            var infFiles = printerInfFiles
+                .Where(path => !IsV4PrinterDriverInf(path))
+                .ToList();
 
             if (!infFiles.Any())
             {
+                if (printerInfFiles.Any(IsV4PrinterDriverInf))
+                {
+                    throw new InvalidOperationException(
+                        "The extracted package contains only V4 printer INFs. Printervention requires a model-specific Type 3/V3 driver.");
+                }
+
                 throw new InvalidOperationException("No INF driver files were found in that folder. Extract the vendor driver package first, then choose the extracted folder.");
             }
 
@@ -184,7 +193,8 @@ namespace Printervention
 
             var requiresWindowsDefaults =
                 string.Equals(preferredVendor, "Canon", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(preferredVendor, "Kyocera", StringComparison.OrdinalIgnoreCase);
+                string.Equals(preferredVendor, "Kyocera", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(preferredVendor, "Xerox", StringComparison.OrdinalIgnoreCase);
             string vendorTicketError;
             var vendorTicketDefaultsApplied = TryApplyVendorPrintTicketXmlDefaults(
                 printerName,
@@ -808,6 +818,14 @@ namespace Printervention
             var header = File.ReadLines(path).Take(500).ToArray();
             return header.Any(line => line.Trim().Equals("[Manufacturer]", StringComparison.OrdinalIgnoreCase)) &&
                 header.Any(line => Regex.IsMatch(line, @"^\s*Class\s*=\s*Printer\s*$", RegexOptions.IgnoreCase));
+        }
+
+        private static bool IsV4PrinterDriverInf(string path)
+        {
+            // Type 4 packages normally declare ClassVer=4.0; checking the INF prevents staging a
+            // prohibited V4 package even when its filename or download card is mislabeled.
+            return File.ReadLines(path).Take(500).Any(line =>
+                Regex.IsMatch(line, @"^\s*ClassVer(?:sion)?\s*=\s*4(?:\.0+)?\s*$", RegexOptions.IgnoreCase));
         }
 
         private static bool IsNativeArchitectureInf(string path)

@@ -39,7 +39,8 @@ Download the current portable Windows executable from [GitHub Releases](https://
 - Includes a Test Plan button for no-printer validation.
 - Applies black-and-white and one-sided defaults through native DEVMODE, managed PrintTicket, and Windows PrintManagement, then verifies the Windows-reported settings.
 - Directly updates Canon's private Auto Color Detection ticket setting so Canon preferences show `Black and White` rather than `Auto [Color/B&W]`.
-- Requires verified Windows PrintManagement and PrintTicket XML results for Canon and Kyocera instead of trusting generic driver API success.
+- Requires verified Windows PrintManagement and PrintTicket XML results for Canon, Kyocera, and Xerox instead of trusting generic driver API success.
+- Resolves common Xerox product families to their official model download pages, accepts only model-specific V3 PCL6 packages, and rejects Smart Start, Global Print Driver, class, generic, and V4 packages at both download and INF inspection time.
 
 ## Antivirus and signing
 

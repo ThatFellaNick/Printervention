@@ -79,6 +79,11 @@ namespace Printervention
                 return "https://ftp.hp.com/pub/softlib/software13/printers/UPD/upd-pcl6-win10-x64-8.2.0.26778.zip";
             }
 
+            if (recommendation.Vendor.Equals("Xerox", StringComparison.OrdinalIgnoreCase))
+            {
+                return FindXeroxDriverPackageUrl(recommendation);
+            }
+
             using (var client = CreateWebClient())
             {
                 var html = client.DownloadString(recommendation.SupportUrl);
@@ -189,6 +194,69 @@ namespace Printervention
             }
         }
 
+        private static string FindXeroxDriverPackageUrl(DriverRecommendation recommendation)
+        {
+            if (recommendation.SupportUrl.IndexOf("/product/", StringComparison.OrdinalIgnoreCase) < 0)
+            {
+                throw new InvalidOperationException(
+                    "I could not map that Xerox name to an exact product page. Open Xerox support, choose the exact model-specific V3 PCL6 package, then use Stage Extracted Driver Folder.");
+            }
+
+            using (var client = CreateWebClient())
+            {
+                var downloadPageUrl = recommendation.SupportUrl +
+                    (recommendation.SupportUrl.Contains("?") ? "&" : "?") +
+                    "language=en&platform=" + (Environment.Is64BitOperatingSystem ? "win10x64" : "win10");
+                var html = client.DownloadString(downloadPageUrl);
+                var candidates = ExtractXeroxDownloadPanelLinks(html, downloadPageUrl)
+                    .Where(candidate => recommendation.IsAuthorizedUrl(candidate.Url))
+                    .Where(candidate => IsDriverDownloadCandidate(candidate, recommendation))
+                    .Where(candidate => !IsBlockedDriverUrl(candidate.Url, candidate.Context, recommendation))
+                    .Where(IsXeroxV3DriverCandidate)
+                    .OrderByDescending(candidate => ScoreDriverUrl(candidate, recommendation))
+                    .ToList();
+
+                var preferred = candidates.FirstOrDefault();
+                if (preferred == null)
+                {
+                    throw new InvalidOperationException(
+                        "Xerox did not list an approved model-specific V3 PCL6 package for this model. " +
+                        "Printervention will not substitute Xerox Smart Start, Global Print Driver, a class driver, or V4. " +
+                        "Open the model page to confirm whether Xerox still offers a V3 package.");
+                }
+
+                return preferred.Url;
+            }
+        }
+
+        private static IEnumerable<DriverDownloadCandidate> ExtractXeroxDownloadPanelLinks(string html, string baseUrl)
+        {
+            // Xerox places the tags and package URL in one panel. Keeping that panel intact prevents
+            // a neighboring V4 listing from being mistaken for the selected V3 package.
+            var pattern = @"<div\s+class=[""']xrx-fw-downloads-panel__heading[""'][\s\S]*?(?=<div\s+class=[""']xrx-fw-downloads-panel__heading[""']|\z)";
+            foreach (Match panel in Regex.Matches(html ?? string.Empty, pattern, RegexOptions.IgnoreCase))
+            {
+                var context = WebUtility.HtmlDecode(Regex.Replace(panel.Value, "<[^>]+>", " "));
+                foreach (var candidate in ExtractLinks(panel.Value, baseUrl))
+                {
+                    yield return new DriverDownloadCandidate(candidate.Url, context, context);
+                }
+            }
+        }
+
+        private static bool IsXeroxV3DriverCandidate(DriverDownloadCandidate candidate)
+        {
+            var value = (Uri.UnescapeDataString(candidate.Url) + " " + candidate.Context).ToLowerInvariant();
+            return value.Contains("v3 driver") &&
+                !value.Contains("v4 driver") &&
+                !value.Contains("smart start") &&
+                !value.Contains("smartstart") &&
+                !value.Contains("web-based print driver installer") &&
+                !value.Contains("printsetup") &&
+                !value.Contains("global print driver") &&
+                !value.Contains(" gpd");
+        }
+
         private static int ScoreModelLink(DriverDownloadCandidate link, string model)
         {
             var combined = (link.Url + " " + link.Text).Replace("-", string.Empty).Replace(" ", string.Empty);
@@ -289,6 +357,10 @@ namespace Printervention
 
             return lowered.Contains("universal") ||
                 lowered.Contains("global") ||
+                lowered.Contains("smart start") ||
+                lowered.Contains("smartstart") ||
+                lowered.Contains("web-based print driver installer") ||
+                lowered.Contains("printsetup") ||
                 (lowered.Contains("generic") && !isAllowedCanonGenericPlus) ||
                 lowered.Contains(" v4") ||
                 lowered.Contains("v4_") ||

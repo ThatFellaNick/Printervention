@@ -470,6 +470,7 @@ namespace Printervention
                 "- Prefer PCL/PCL6 when the vendor offers it, or an exact-model Kyocera KX driver." + Environment.NewLine +
                 "- Brother and Epson exact-model printer drivers are allowed when their names omit PCL." + Environment.NewLine +
                 "- Canon Generic Plus PCL6 and HP Universal Printing PCL 6 are allowed only as vendor-specific fallbacks." + Environment.NewLine +
+                "- Xerox requires an exact-model V3 PCL6 package; Smart Start and Global Print Driver remain blocked." + Environment.NewLine +
                 "- Avoid all other universal, global, and generic drivers." + Environment.NewLine +
                 "- Do not use PCL v4, class drivers, IPP class drivers, or vendor app-only packages." + Environment.NewLine +
                 "- Download installers only from the authorized vendor domains shown above." + Environment.NewLine +
