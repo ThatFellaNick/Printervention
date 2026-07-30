@@ -143,7 +143,7 @@ namespace Printervention
             CreatePrinterQueueWithFallbacks(printerName.Trim(), portName, normalizedDriverName);
             try
             {
-                ApplyPrinterDefaults(printerName.Trim());
+                ApplyPrinterDefaults(printerName.Trim(), preferredVendor);
             }
             catch (Exception ex)
             {
@@ -174,18 +174,32 @@ namespace Printervention
             }
         }
 
-        private static void ApplyPrinterDefaults(string printerName)
+        private static void ApplyPrinterDefaults(string printerName, string preferredVendor)
         {
             TryApplyWmiPrinterDefaults(printerName);
             var nativeDefaultsApplied = TryApplyNativeDevModeDefaults(printerName);
             var printTicketDefaultsApplied = TryApplyManagedPrintTicketDefaults(printerName);
-            var printConfigurationDefaultsApplied = false;
-            if (!nativeDefaultsApplied && !printTicketDefaultsApplied)
+            string printConfigurationError;
+            var printConfigurationDefaultsApplied = TryApplyWindowsPrintConfigurationDefaults(printerName, out printConfigurationError);
+
+            var requiresWindowsDefaults =
+                string.Equals(preferredVendor, "Canon", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(preferredVendor, "Kyocera", StringComparison.OrdinalIgnoreCase);
+            string vendorTicketError;
+            var vendorTicketDefaultsApplied = TryApplyVendorPrintTicketXmlDefaults(
+                printerName,
+                requiresWindowsDefaults,
+                string.Equals(preferredVendor, "Canon", StringComparison.OrdinalIgnoreCase),
+                out vendorTicketError);
+
+            if (requiresWindowsDefaults && (!printConfigurationDefaultsApplied || !vendorTicketDefaultsApplied))
             {
-                printConfigurationDefaultsApplied = TryApplyWindowsPrintConfigurationDefaults(printerName);
+                throw new InvalidOperationException(
+                    "The " + preferredVendor + " driver did not accept its required Windows print defaults. " +
+                    CondenseDefaultError(printConfigurationError, vendorTicketError));
             }
 
-            if (!nativeDefaultsApplied && !printTicketDefaultsApplied && !printConfigurationDefaultsApplied)
+            if (!nativeDefaultsApplied && !printTicketDefaultsApplied && !printConfigurationDefaultsApplied && !vendorTicketDefaultsApplied)
             {
                 throw new InvalidOperationException(
                     "The printer queue was created, but its driver rejected the black-and-white and one-sided defaults. " +
@@ -193,7 +207,7 @@ namespace Printervention
             }
         }
 
-        private static bool TryApplyWindowsPrintConfigurationDefaults(string printerName)
+        private static bool TryApplyWindowsPrintConfigurationDefaults(string printerName, out string error)
         {
             try
             {
@@ -207,14 +221,79 @@ namespace Printervention
                 var command =
                     "$ErrorActionPreference='Stop'; " +
                     "Set-PrintConfiguration -PrinterName " + PowerShellQuote(printerName) +
-                    " -Color $false -DuplexingMode OneSided";
+                    " -Color $false -DuplexingMode OneSided; " +
+                    "$configuration = Get-PrintConfiguration -PrinterName " + PowerShellQuote(printerName) + "; " +
+                    "if ($configuration.Color) { throw 'Windows still reports color enabled.' }; " +
+                    "if ([string]$configuration.DuplexingMode -ne 'OneSided') { throw ('Windows reports duplex mode ' + $configuration.DuplexingMode) }";
                 RunProcessWithOutput(powerShell, "-NoProfile -NonInteractive -Command " + Quote(command), true);
+                error = string.Empty;
                 return true;
             }
-            catch
+            catch (Exception ex)
             {
+                error = ex.Message;
                 return false;
             }
+        }
+
+        private static bool TryApplyVendorPrintTicketXmlDefaults(
+            string printerName,
+            bool requireStandardColorAndDuplex,
+            bool requireCanonAutoColor,
+            out string error)
+        {
+            try
+            {
+                // Direct PrintTicket XML is necessary for vendor controls that do not follow the
+                // public DEVMODE or PrintTicket properties, notably Canon Auto Color Detection.
+                var powerShell = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.System),
+                    "WindowsPowerShell",
+                    "v1.0",
+                    "powershell.exe");
+                var command =
+                    "$ErrorActionPreference='Stop'; " +
+                    "$configuration = Get-PrintConfiguration -PrinterName " + PowerShellQuote(printerName) + "; " +
+                    "[xml]$ticket = $configuration.PrintTicketXml; " +
+                    "$namespaces = New-Object System.Xml.XmlNamespaceManager($ticket.NameTable); " +
+                    "$namespaces.AddNamespace('psf', 'http://schemas.microsoft.com/windows/2003/08/printing/printschemaframework'); " +
+                    "$colorOption = $ticket.SelectSingleNode(\"//psf:Feature[@name='psk:PageOutputColor']/psf:Option\", $namespaces); " +
+                    "if ($colorOption) { $colorOption.SetAttribute('name', 'psk:Monochrome') }; " +
+                    "$duplexOption = $ticket.SelectSingleNode(\"//psf:Feature[@name='psk:JobDuplexAllDocumentsContiguously']/psf:Option\", $namespaces); " +
+                    "if ($duplexOption) { $duplexOption.SetAttribute('name', 'psk:OneSided') }; " +
+                    (requireStandardColorAndDuplex ? "if (-not $colorOption) { throw 'PageOutputColor was not found in the driver ticket.' }; if (-not $duplexOption) { throw 'JobDuplexAllDocumentsContiguously was not found in the driver ticket.' }; " : string.Empty) +
+                    "$autoFeature = $ticket.SelectSingleNode(\"//psf:Feature[contains(@name, ':PageOutputColorAutoDetection')]\", $namespaces); " +
+                    "if ($autoFeature) { " +
+                    "  $autoOption = $autoFeature.SelectSingleNode('psf:Option', $namespaces); " +
+                    "  $featureName = $autoFeature.GetAttribute('name'); " +
+                    "  $prefixEnd = $featureName.IndexOf(':'); " +
+                    "  if ($autoOption -and $prefixEnd -gt 0) { $autoOption.SetAttribute('name', $featureName.Substring(0, $prefixEnd) + ':None') } " +
+                    "}; " +
+                    (requireCanonAutoColor ? "if (-not $autoFeature) { throw 'Canon Auto Color Detection was not found in the driver ticket.' }; " : string.Empty) +
+                    "Set-PrintConfiguration -PrinterName " + PowerShellQuote(printerName) + " -PrintTicketXml $ticket.OuterXml; " +
+                    "$verify = Get-PrintConfiguration -PrinterName " + PowerShellQuote(printerName) + "; " +
+                    "if ($verify.Color) { throw 'PrintTicket verification still reports color enabled.' }; " +
+                    "if ([string]$verify.DuplexingMode -ne 'OneSided') { throw ('PrintTicket verification reports duplex mode ' + $verify.DuplexingMode) }; " +
+                    (requireCanonAutoColor
+                        ? "[xml]$verifyTicket = $verify.PrintTicketXml; $verifyNamespaces = New-Object System.Xml.XmlNamespaceManager($verifyTicket.NameTable); $verifyNamespaces.AddNamespace('psf', 'http://schemas.microsoft.com/windows/2003/08/printing/printschemaframework'); $verifyAutoOption = $verifyTicket.SelectSingleNode(\"//psf:Feature[contains(@name, ':PageOutputColorAutoDetection')]/psf:Option\", $verifyNamespaces); if (-not $verifyAutoOption -or -not $verifyAutoOption.GetAttribute('name').EndsWith(':None')) { throw 'Canon Auto Color Detection remained enabled after the ticket update.' }"
+                        : string.Empty);
+                RunProcessWithOutput(powerShell, "-NoProfile -NonInteractive -Command " + Quote(command), true);
+                error = string.Empty;
+                return true;
+            }
+            catch (Exception ex)
+            {
+                error = ex.Message;
+                return false;
+            }
+        }
+
+        private static string CondenseDefaultError(string configurationError, string ticketError)
+        {
+            return string.Join(" ", new[] { configurationError, ticketError }
+                .Where(message => !string.IsNullOrWhiteSpace(message))
+                .Select(message => Regex.Replace(message, @"\s+", " ").Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase));
         }
 
         private static bool TryApplyNativeDevModeDefaults(string printerName)
