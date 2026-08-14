@@ -32,7 +32,6 @@ namespace Printervention
         private Button _stageDriverFolderButton;
         private Button _addToInstallListButton;
         private Button _refreshDriversButton;
-        private Button _testPlanButton;
         private Button _installAllButton;
         private Button _loadSelectedButton;
         private Button _removeSelectedButton;
@@ -170,13 +169,10 @@ namespace Printervention
             _addToInstallListButton.Click += (sender, args) => AddCurrentPrinterToInstallList();
             _refreshDriversButton = CreateActionButton("Refresh Installed Drivers");
             _refreshDriversButton.Click += (sender, args) => RefreshInstalledDrivers();
-            _testPlanButton = CreateActionButton("Test Plan");
-            _testPlanButton.Click += (sender, args) => TestPlan();
             actionBar.Controls.Add(_openSupportButton);
             actionBar.Controls.Add(_stageDriverFolderButton);
             actionBar.Controls.Add(_addToInstallListButton);
             actionBar.Controls.Add(_refreshDriversButton);
-            actionBar.Controls.Add(_testPlanButton);
             root.Controls.Add(actionBar);
 
             var listBar = new TableLayoutPanel
@@ -543,7 +539,6 @@ namespace Printervention
                 "- Do not use PCL v4, class drivers, IPP class drivers, or vendor app-only packages." + Environment.NewLine +
                 "- Download installers only from the authorized vendor domains shown above." + Environment.NewLine +
                 "- Add each discovered printer to the install list, then use Install All." + Environment.NewLine +
-                "- Use Test Plan when you do not have a printer connected." + Environment.NewLine +
                 "- After queue creation, Printervention attempts to set black-and-white and one-sided defaults." + Environment.NewLine + Environment.NewLine +
                 _currentRecommendation.Notes;
         }
@@ -944,65 +939,6 @@ namespace Printervention
             }
         }
 
-        private void TestPlan()
-        {
-            try
-            {
-                var driverName = Convert.ToString(_installedDriverComboBox.SelectedItem);
-                if (string.IsNullOrWhiteSpace(driverName))
-                {
-                    driverName = _currentRecommendation.RecommendedDriver;
-                }
-
-                var report = BuildTestPlanReport(driverName);
-                SetStatus("Test plan passed. No printer or Windows queue was changed.");
-                MessageBox.Show(this, report, "Printervention test plan", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            }
-            catch (Exception ex)
-            {
-                SetStatus(ex.Message);
-                MessageBox.Show(this, ex.Message, "Test plan failed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            }
-        }
-
-        private string BuildTestPlanReport(string driverName)
-        {
-            IPAddress parsed;
-            if (!IPAddress.TryParse(_ipAddressTextBox.Text.Trim(), out parsed))
-            {
-                throw new InvalidOperationException("Enter any valid test IP address, such as 192.0.2.10.");
-            }
-
-            if (string.IsNullOrWhiteSpace(_printerNameTextBox.Text))
-            {
-                throw new InvalidOperationException("Enter a queue name for the test plan.");
-            }
-
-            var usingRecommendationPlaceholder = string.Equals(driverName, _currentRecommendation.RecommendedDriver, StringComparison.OrdinalIgnoreCase);
-            if (!usingRecommendationPlaceholder &&
-                !DriverCatalog.IsCompatibleDriverName(driverName, _modelTextBox.Text, GetPreferredVendor()))
-            {
-                throw new InvalidOperationException("The selected driver is not an approved exact-model, non-v4 printer driver for this brand and model.");
-            }
-
-            if (_currentRecommendation.IsKnownVendor && !_currentRecommendation.IsAuthorizedUrl(_currentRecommendation.SupportUrl))
-            {
-                throw new InvalidOperationException("The support URL is not on the authorized vendor domain list.");
-            }
-
-            // The dry run intentionally mirrors the create path without creating ports or queues.
-            return
-                "No changes were made." + Environment.NewLine + Environment.NewLine +
-                "Printer IP: " + parsed + Environment.NewLine +
-                "Queue name: " + _printerNameTextBox.Text.Trim() + Environment.NewLine +
-                "Port to create: IP_" + parsed + Environment.NewLine +
-                "Driver to use: " + driverName + Environment.NewLine +
-                "Vendor: " + _currentRecommendation.Vendor + Environment.NewLine +
-                "Authorized domains: " + _currentRecommendation.AuthorizedDomainDisplay + Environment.NewLine +
-                "Defaults to apply: black-and-white, one-sided" + Environment.NewLine + Environment.NewLine +
-                "Hardware still needed for final validation: discovery response, test page output, and driver-specific color/duplex behavior.";
-        }
-
         private void SetBusy(bool busy, string status)
         {
             _discoverButton.Enabled = !busy;
@@ -1010,7 +946,6 @@ namespace Printervention
             _stageDriverFolderButton.Enabled = !busy;
             _addToInstallListButton.Enabled = !busy;
             _refreshDriversButton.Enabled = !busy;
-            _testPlanButton.Enabled = !busy;
             _installAllButton.Enabled = !busy;
             _loadSelectedButton.Enabled = !busy;
             _removeSelectedButton.Enabled = !busy;

@@ -36,7 +36,6 @@ Download the current portable Windows executable from [GitHub Releases](https://
 - Driver staging selects the native Windows architecture and registers duplicate INF driver names only once.
 - After staging, Printervention attempts to register the matching Windows print driver from the INF before creating the queue.
 - Cleans Windows driver-store names before creating the queue through the native spooler API.
-- Includes a Test Plan button for no-printer validation.
 - Applies black-and-white and one-sided defaults through native DEVMODE, managed PrintTicket, and Windows PrintManagement, then verifies the Windows-reported settings.
 - Directly updates Canon's private Auto Color Detection ticket setting so Canon preferences show `Black and White` rather than `Auto [Color/B&W]`.
 - Requires verified Windows PrintManagement and PrintTicket XML results for Canon, Kyocera, and Xerox instead of trusting generic driver API success.
@@ -65,21 +64,6 @@ The executable is created under:
 ```text
 bin\Release\net48\Printervention.exe
 ```
-
-## Testing without a printer
-
-You can validate most of the app without owning a printer:
-
-1. Open the app.
-2. Enter a documentation-only test IP such as `192.0.2.10`.
-3. Choose a brand, such as `HP`.
-4. Enter a realistic model, such as `HP Color LaserJet Pro MFP M479fdw`.
-5. Enter a queue name.
-6. Click `Test Plan`.
-
-The test plan does not create a port, install a driver, create a printer queue, or send network traffic. It checks the planned queue name, TCP/IP port name, model-specific PCL/KX non-v4 driver rule, vendor support URL, authorized domains, and the intended black-and-white/one-sided defaults.
-
-Hardware is still needed later to verify live SNMP/HTTP discovery, actual driver installation, test-page printing, and whether a specific vendor driver honors color and duplex defaults exactly as Windows reports them.
 
 ## Real printer workflow
 
