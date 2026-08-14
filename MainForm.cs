@@ -57,6 +57,22 @@ namespace Printervention
             UpdateRecommendation();
         }
 
+        private static Image LoadEmbeddedLogo()
+        {
+            using (var stream = typeof(MainForm).Assembly.GetManifestResourceStream("Printervention.Assets.Printervention.png"))
+            {
+                if (stream == null)
+                {
+                    throw new InvalidOperationException("The embedded Printervention logo could not be loaded.");
+                }
+
+                using (var source = Image.FromStream(stream))
+                {
+                    return new Bitmap(source);
+                }
+            }
+        }
+
         private void BuildInterface()
         {
             var root = new TableLayoutPanel
@@ -91,16 +107,37 @@ namespace Printervention
                 Margin = new Padding(0, 0, 0, 10)
             };
 
-            var heading = new FlowLayoutPanel
+            var headingText = new FlowLayoutPanel
             {
-                Dock = DockStyle.Top,
+                Dock = DockStyle.Fill,
                 AutoSize = true,
                 FlowDirection = FlowDirection.TopDown,
                 WrapContents = false,
                 Margin = Padding.Empty
             };
-            heading.Controls.Add(title);
-            heading.Controls.Add(securityContextNotice);
+            headingText.Controls.Add(title);
+            headingText.Controls.Add(securityContextNotice);
+
+            var logo = new PictureBox
+            {
+                Image = LoadEmbeddedLogo(),
+                Size = new Size(58, 58),
+                SizeMode = PictureBoxSizeMode.Zoom,
+                Margin = new Padding(0, 0, 12, 8),
+                TabStop = false
+            };
+
+            var heading = new TableLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                AutoSize = true,
+                ColumnCount = 2,
+                Margin = Padding.Empty
+            };
+            heading.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            heading.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            heading.Controls.Add(logo, 0, 0);
+            heading.Controls.Add(headingText, 1, 0);
             root.Controls.Add(heading);
 
             var inputGrid = new TableLayoutPanel
