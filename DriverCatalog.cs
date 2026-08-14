@@ -443,7 +443,7 @@ namespace Printervention
             Vendor = "Unknown";
             ModelQuery = model;
             RecommendedDriver = "Unknown PCL6 printer driver";
-            SupportUrl = "https://www.google.com/search?q=" + Uri.EscapeDataString((model ?? "printer") + " model-specific PCL6 driver -v4 -universal");
+            SupportUrl = string.Empty;
             Notes = "No catalog match found. Use the vendor's official support site and select a model-specific PCL/PCL6 package that is not universal and not v4.";
             AuthorizedDomains = new string[0];
         }
@@ -654,9 +654,9 @@ namespace Printervention
 
         public void OpenSupportPage()
         {
-            if (IsKnownVendor && !IsAuthorizedUrl(SupportUrl))
+            if (!IsKnownVendor || !IsAuthorizedUrl(SupportUrl))
             {
-                throw new InvalidOperationException("The support URL is not on the authorized vendor domain list.");
+                throw new InvalidOperationException("Select a recognized printer brand before opening its official driver page.");
             }
 
             Process.Start(new ProcessStartInfo(SupportUrl) { UseShellExecute = true });

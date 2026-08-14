@@ -523,12 +523,15 @@ namespace Printervention
         {
             var selectedVendor = _vendorComboBox.SelectedIndex > 0 ? Convert.ToString(_vendorComboBox.SelectedItem) : string.Empty;
             _currentRecommendation = _catalog.Recommend(selectedVendor, _modelTextBox.Text);
+            var supportPageLine = _currentRecommendation.IsKnownVendor
+                ? "Official driver page: " + _currentRecommendation.SupportUrl + Environment.NewLine + Environment.NewLine
+                : string.Empty;
 
             _recommendationTextBox.Text =
                 "Vendor: " + _currentRecommendation.Vendor + Environment.NewLine +
                 "Model/Search: " + _currentRecommendation.ModelQuery + Environment.NewLine +
                 "Recommended driver family: " + _currentRecommendation.RecommendedDriver + Environment.NewLine +
-                "Official driver page: " + _currentRecommendation.SupportUrl + Environment.NewLine + Environment.NewLine +
+                supportPageLine +
                 "Authorized vendor domains: " + _currentRecommendation.AuthorizedDomainDisplay + Environment.NewLine + Environment.NewLine +
                 "Rules:" + Environment.NewLine +
                 "- Prefer PCL/PCL6 when the vendor offers it, or an exact-model Kyocera KX driver." + Environment.NewLine +
@@ -541,6 +544,14 @@ namespace Printervention
                 "- Add each discovered printer to the install list, then use Install All." + Environment.NewLine +
                 "- After queue creation, Printervention attempts to set black-and-white and one-sided defaults." + Environment.NewLine + Environment.NewLine +
                 _currentRecommendation.Notes;
+            _openSupportButton.Enabled = CanOpenSupportPage();
+        }
+
+        private bool CanOpenSupportPage()
+        {
+            return _currentRecommendation != null &&
+                _currentRecommendation.IsKnownVendor &&
+                _currentRecommendation.IsAuthorizedUrl(_currentRecommendation.SupportUrl);
         }
 
         private void OpenSupportPage()
@@ -942,7 +953,7 @@ namespace Printervention
         private void SetBusy(bool busy, string status)
         {
             _discoverButton.Enabled = !busy;
-            _openSupportButton.Enabled = !busy;
+            _openSupportButton.Enabled = !busy && CanOpenSupportPage();
             _stageDriverFolderButton.Enabled = !busy;
             _addToInstallListButton.Enabled = !busy;
             _refreshDriversButton.Enabled = !busy;
