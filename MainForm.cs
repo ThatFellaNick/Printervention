@@ -51,6 +51,7 @@ namespace Printervention
             ClientSize = new Size(1080, 720);
             StartPosition = FormStartPosition.CenterScreen;
             Font = new Font("Segoe UI", 9F);
+            BackColor = SystemColors.Control;
             BuildInterface();
             LoadVendors();
             RefreshInstalledDrivers();
@@ -62,7 +63,7 @@ namespace Printervention
             var root = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
-                Padding = new Padding(16),
+                Padding = new Padding(20, 16, 20, 14),
                 ColumnCount = 1,
                 RowCount = 7
             };
@@ -107,16 +108,19 @@ namespace Printervention
             {
                 Dock = DockStyle.Top,
                 ColumnCount = 4,
-                AutoSize = true
+                AutoSize = true,
+                Margin = new Padding(0, 2, 0, 0)
             };
-            inputGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 160));
+            inputGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 158));
             inputGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-            inputGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130));
+            inputGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 138));
             inputGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
             root.Controls.Add(inputGrid);
 
             _ipAddressTextBox = AddLabeledTextBox(inputGrid, "Printer IP", 0, 0);
-            _discoverButton = new Button { Text = "Find Printer", AutoSize = true, Margin = new Padding(8, 2, 0, 8) };
+            _discoverButton = CreateActionButton("Find Printer", new Padding(0, 2, 0, 8));
+            _discoverButton.MinimumSize = new Size(112, 30);
+            _discoverButton.Anchor = AnchorStyles.Left;
             _discoverButton.Click += async (sender, args) => await DiscoverPrinterAsync();
             inputGrid.Controls.Add(_discoverButton, 3, 0);
 
@@ -128,16 +132,16 @@ namespace Printervention
                 ClearIncompatibleInstalledDriverSelection();
             };
 
-            _vendorComboBox = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill, Margin = new Padding(0, 2, 8, 8) };
+            _vendorComboBox = CreateFieldComboBox();
             _vendorComboBox.SelectedIndexChanged += (sender, args) =>
             {
                 UpdateRecommendation();
                 ClearIncompatibleInstalledDriverSelection();
             };
-            inputGrid.Controls.Add(new Label { Text = "Brand", AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(0, 6, 8, 8) }, 2, 1);
+            inputGrid.Controls.Add(CreateFieldLabel("Brand"), 2, 1);
             inputGrid.Controls.Add(_vendorComboBox, 3, 1);
 
-            _printerNameTextBox = AddLabeledTextBox(inputGrid, "Queue Name (editable)", 0, 2);
+            _printerNameTextBox = AddLabeledTextBox(inputGrid, "Queue Name", 0, 2);
             _printerNameTextBox.TextChanged += (sender, args) =>
             {
                 if (!_settingSuggestedQueueName)
@@ -146,20 +150,27 @@ namespace Printervention
                 }
             };
 
-            _installedDriverComboBox = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill, Margin = new Padding(0, 2, 8, 8) };
-            inputGrid.Controls.Add(new Label { Text = "Installed Driver", AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(0, 6, 8, 8) }, 2, 2);
+            _installedDriverComboBox = CreateFieldComboBox();
+            inputGrid.Controls.Add(CreateFieldLabel("Installed Drivers"), 2, 2);
             inputGrid.Controls.Add(_installedDriverComboBox, 3, 2);
 
-            var actionBar = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, FlowDirection = FlowDirection.LeftToRight };
-            _openSupportButton = new Button { Text = "Open Model Driver Page", AutoSize = true, Margin = new Padding(0, 6, 8, 8) };
+            var actionBar = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                AutoSize = true,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = true,
+                Margin = new Padding(0, 2, 0, 2)
+            };
+            _openSupportButton = CreateActionButton("Open Model Driver Page");
             _openSupportButton.Click += (sender, args) => OpenSupportPage();
-            _stageDriverFolderButton = new Button { Text = "Stage Extracted Driver Folder", AutoSize = true, Margin = new Padding(0, 6, 8, 8) };
+            _stageDriverFolderButton = CreateActionButton("Stage Extracted Driver Folder");
             _stageDriverFolderButton.Click += async (sender, args) => await StageExtractedDriverFolderAsync();
-            _addToInstallListButton = new Button { Text = "Add to Install List", AutoSize = true, Margin = new Padding(0, 6, 8, 8) };
+            _addToInstallListButton = CreateActionButton("Add to Install List");
             _addToInstallListButton.Click += (sender, args) => AddCurrentPrinterToInstallList();
-            _refreshDriversButton = new Button { Text = "Refresh Installed Drivers", AutoSize = true, Margin = new Padding(0, 6, 8, 8) };
+            _refreshDriversButton = CreateActionButton("Refresh Installed Drivers");
             _refreshDriversButton.Click += (sender, args) => RefreshInstalledDrivers();
-            _testPlanButton = new Button { Text = "Test Plan", AutoSize = true, Margin = new Padding(0, 6, 8, 8) };
+            _testPlanButton = CreateActionButton("Test Plan");
             _testPlanButton.Click += (sender, args) => TestPlan();
             actionBar.Controls.Add(_openSupportButton);
             actionBar.Controls.Add(_stageDriverFolderButton);
@@ -193,13 +204,13 @@ namespace Printervention
                 WrapContents = false,
                 Anchor = AnchorStyles.Right
             };
-            _installAllButton = new Button { Text = "Install All", AutoSize = true, Margin = new Padding(8, 2, 0, 4) };
+            _installAllButton = CreateListActionButton("Install All");
             _installAllButton.Click += async (sender, args) => await InstallAllAsync();
-            _loadSelectedButton = new Button { Text = "Load Selected", AutoSize = true, Margin = new Padding(8, 2, 0, 4) };
+            _loadSelectedButton = CreateListActionButton("Load Selected");
             _loadSelectedButton.Click += (sender, args) => LoadSelectedInstallItem();
-            _removeSelectedButton = new Button { Text = "Remove Selected", AutoSize = true, Margin = new Padding(8, 2, 0, 4) };
+            _removeSelectedButton = CreateListActionButton("Remove Selected");
             _removeSelectedButton.Click += (sender, args) => RemoveSelectedInstallItems();
-            _clearListButton = new Button { Text = "Clear List", AutoSize = true, Margin = new Padding(8, 2, 0, 4) };
+            _clearListButton = CreateListActionButton("Clear List");
             _clearListButton.Click += (sender, args) => ClearInstallList();
             listActions.Controls.Add(_installAllButton);
             listActions.Controls.Add(_loadSelectedButton);
@@ -234,17 +245,64 @@ namespace Printervention
                 Dock = DockStyle.Fill,
                 AutoSize = true,
                 ForeColor = SystemColors.ControlDarkDark,
-                Text = "Ready."
+                Text = "Ready.",
+                Margin = new Padding(0, 2, 0, 0)
             };
             root.Controls.Add(_statusLabel);
         }
 
         private TextBox AddLabeledTextBox(TableLayoutPanel grid, string label, int column, int row)
         {
-            grid.Controls.Add(new Label { Text = label, AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(0, 6, 8, 8) }, column, row);
-            var textBox = new TextBox { Dock = DockStyle.Fill, Margin = new Padding(0, 2, 8, 8) };
+            grid.Controls.Add(CreateFieldLabel(label), column, row);
+            var textBox = new TextBox { Dock = DockStyle.Fill, Margin = new Padding(0, 2, 12, 8) };
             grid.Controls.Add(textBox, column + 1, row);
             return textBox;
+        }
+
+        private static Label CreateFieldLabel(string text)
+        {
+            return new Label
+            {
+                Text = text,
+                AutoSize = true,
+                Anchor = AnchorStyles.Left,
+                Margin = new Padding(0, 6, 12, 8)
+            };
+        }
+
+        private static ComboBox CreateFieldComboBox()
+        {
+            return new ComboBox
+            {
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                Dock = DockStyle.Fill,
+                Margin = new Padding(0, 2, 0, 8)
+            };
+        }
+
+        private static Button CreateActionButton(string text)
+        {
+            return CreateActionButton(text, new Padding(0, 4, 8, 6));
+        }
+
+        private static Button CreateActionButton(string text, Padding margin)
+        {
+            return new Button
+            {
+                Text = text,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                MinimumSize = new Size(0, 30),
+                Padding = new Padding(8, 1, 8, 1),
+                Margin = margin
+            };
+        }
+
+        private static Button CreateListActionButton(string text)
+        {
+            var button = CreateActionButton(text, new Padding(8, 2, 0, 4));
+            button.MinimumSize = new Size(0, 30);
+            return button;
         }
 
         private static DataGridView BuildInstallListGrid()
@@ -257,13 +315,23 @@ namespace Printervention
                 AllowUserToResizeRows = false,
                 AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
                 BackgroundColor = SystemColors.Window,
-                BorderStyle = BorderStyle.Fixed3D,
+                BorderStyle = BorderStyle.FixedSingle,
+                CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal,
+                ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.Single,
+                ColumnHeadersHeight = 30,
+                ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing,
+                EnableHeadersVisualStyles = false,
                 MultiSelect = true,
                 ReadOnly = true,
                 RowHeadersVisible = false,
+                RowTemplate = { Height = 28 },
                 SelectionMode = DataGridViewSelectionMode.FullRowSelect,
                 Margin = new Padding(0, 0, 0, 4)
             };
+
+            grid.ColumnHeadersDefaultCellStyle.BackColor = SystemColors.ControlLight;
+            grid.ColumnHeadersDefaultCellStyle.Font = new Font(SystemFonts.MessageBoxFont, FontStyle.Bold);
+            grid.AlternatingRowsDefaultCellStyle.BackColor = Color.FromArgb(248, 249, 250);
 
             grid.Columns.Add(CreateInstallColumn("IP Address", 14));
             grid.Columns.Add(CreateInstallColumn("Model", 23));

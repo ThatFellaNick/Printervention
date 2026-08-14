@@ -92,4 +92,4 @@ Hardware is still needed later to verify live SNMP/HTTP discovery, actual driver
 7. Printervention processes each pending row in sequence and records its result in the Status and Details columns.
 8. Use `Load Selected` to correct a failed row and add the updated entry back to the list, then click `Install All` again to retry only rows that are not already installed.
 
-If `Installed Driver` is empty when a printer is added, the batch installer attempts to obtain and stage the approved vendor driver automatically. A manually selected installed driver is captured with that printer's list entry only when it is compatible with the selected brand and model.
+If `Installed Drivers` is empty when a printer is added, the batch installer attempts to obtain and stage the approved vendor driver automatically. A manually selected installed driver is captured with that printer's list entry only when it is compatible with the selected brand and model.
